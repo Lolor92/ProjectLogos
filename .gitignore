@@ -1,0 +1,8 @@
+/*
+
+!/.gitignore
+!/ProjectLogos.uproject
+!/Config/
+!/Config/**
+!/Source/
+!/Source/**
