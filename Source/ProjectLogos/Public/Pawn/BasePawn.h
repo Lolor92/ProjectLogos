@@ -2,21 +2,28 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
+#include "AbilitySystemInterface.h"
 #include "BasePawn.generated.h"
 
 class UCapsuleComponent;
 class USkeletalMeshComponent;
 class UCharacterMoverComponent;
 class UPL_MoverPawnComponent;
+class UPL_AbilitySystemComponent;
 
 
 UCLASS()
-class PROJECTLOGOS_API ABasePawn : public APawn
+class PROJECTLOGOS_API ABasePawn : public APawn, public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
 public:
 	ABasePawn();
+	
+	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
+	
+	UFUNCTION(BlueprintPure, Category="AbilitySystem")
+	UPL_AbilitySystemComponent* GetProjectAbilitySystemComponent() const { return AbilitySystemComponent; }
 
 	UFUNCTION(BlueprintPure, Category="Components")
 	UCapsuleComponent* GetCapsuleComponent() const { return CapsuleComponent; }
@@ -40,6 +47,8 @@ public:
 	bool IsMoving() const;
 	
 protected:
+	virtual void BeginPlay() override;
+	
 	// Collision body used by Mover.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
@@ -55,4 +64,8 @@ protected:
 	// Produces movement input for CharacterMoverComponent.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UPL_MoverPawnComponent> MoverPawnComponent;
+	
+	// Project GAS component used by this pawn.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UPL_AbilitySystemComponent> AbilitySystemComponent;
 };

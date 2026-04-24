@@ -7,17 +7,18 @@ public class ProjectLogos : ModuleRules
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 	
 		PublicDependencyModuleNames.AddRange(new string[]
-        		{
-        			"Core",
-        			"CoreUObject",
-        			"Engine",
-        			"EnhancedInput",
-        			"GameplayAbilities",
-        			"GameplayTags",
-        			"GameplayTasks",
-        			"InputCore",
-        			"Mover"
-        		});
+		{
+			"Core",
+			"CoreUObject",
+			"Engine",
+			"EnhancedInput",
+			"GameplayAbilities",
+			"GameplayTags",
+			"GameplayTasks",
+			"InputCore",
+			"Mover",
+			"MotionWarping"
+		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] {  });
 
