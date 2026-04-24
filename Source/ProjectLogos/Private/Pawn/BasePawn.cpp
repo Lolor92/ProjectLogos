@@ -3,6 +3,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
+#include "DefaultMovementSet/LayeredMoves/BasicLayeredMoves.h"
 #include "Mover/PL_MoverPawnComponent.h"
 
 ABasePawn::ABasePawn()
@@ -41,4 +42,24 @@ ABasePawn::ABasePawn()
 
 	// Produces input for Mover.
 	MoverPawnComponent = CreateDefaultSubobject<UPL_MoverPawnComponent>(TEXT("MoverPawnComponent"));
+}
+
+FVector ABasePawn::GetMoverVelocity() const
+{
+	if (!CharacterMoverComponent) return FVector::ZeroVector;
+
+	// Mover owns the movement velocity.
+	return CharacterMoverComponent->GetVelocity();
+}
+
+float ABasePawn::GetGroundSpeed() const
+{
+	// Horizontal speed only. Useful for locomotion animation.
+	return GetMoverVelocity().Size2D();
+}
+
+bool ABasePawn::IsMoving() const
+{
+	// True when horizontal velocity is meaningful.
+	return GetGroundSpeed() > KINDA_SMALL_NUMBER;
 }

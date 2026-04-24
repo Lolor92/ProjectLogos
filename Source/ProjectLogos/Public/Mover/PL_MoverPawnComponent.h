@@ -28,6 +28,14 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Mover")
 	void ClearMoveIntent();
 
+	// Returns the currently cached movement input.
+	UFUNCTION(BlueprintPure, Category="Mover")
+	FVector GetMoveIntent() const { return CachedMoveInputIntent; }
+
+	// True when we have meaningful 2D movement input.
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool HasMoveInput() const { return CachedMoveInputIntent.SizeSquared2D() > KINDA_SMALL_NUMBER; }
+
 protected:
 	// Finds and configures the owner pawn's Mover pieces.
 	virtual void BeginPlay() override;
@@ -51,6 +59,11 @@ protected:
 	// Main visual component. Usually the skeletal mesh.
 	UPROPERTY(Transient)
 	TObjectPtr<USceneComponent> PrimaryVisualComponent = nullptr;
+	
+	// If true, player-controlled pawns face camera yaw while moving.
+	// If false, pawns face their movement direction.
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover")
+	bool bOrientToCameraYaw = true;
 
 private:
 	// Local input direction. Usually X = forward, Y = right.

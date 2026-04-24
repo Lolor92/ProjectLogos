@@ -68,7 +68,7 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	// This is the default input struct used by CharacterMoverComponent.
 	FCharacterDefaultInputs& CharacterInputs =
 		InputCmdResult.InputCollection.FindOrAddMutableDataByType<FCharacterDefaultInputs>();
-
+	
 	// Reset every frame so old facing data does not linger.
 	CharacterInputs.OrientationIntent = FVector::ZeroVector;
 
@@ -101,7 +101,9 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 
 	if (WorldMoveIntent.SizeSquared2D() > 0.01f)
 	{
-		// Face camera yaw while moving, matching the plugin behavior.
-		CharacterInputs.OrientationIntent = YawRotation.Vector();
+		// Player can either face camera yaw or movement direction.
+		CharacterInputs.OrientationIntent = bOrientToCameraYaw
+			? YawRotation.Vector()
+			: WorldMoveIntent.GetSafeNormal2D();
 	}
 }

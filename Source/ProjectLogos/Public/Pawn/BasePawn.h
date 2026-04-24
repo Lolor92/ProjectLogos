@@ -17,7 +17,7 @@ class PROJECTLOGOS_API ABasePawn : public APawn
 
 public:
 	ABasePawn();
-	
+
 	UFUNCTION(BlueprintPure, Category="Components")
 	UCapsuleComponent* GetCapsuleComponent() const { return CapsuleComponent; }
 
@@ -30,6 +30,15 @@ public:
 	UFUNCTION(BlueprintPure, Category="Components")
 	UPL_MoverPawnComponent* GetMoverPawnComponent() const { return MoverPawnComponent; }
 
+	UFUNCTION(BlueprintPure, Category="Mover")
+	FVector GetMoverVelocity() const;
+	
+	UFUNCTION(BlueprintPure, Category="Mover")
+	float GetGroundSpeed() const;
+	
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool IsMoving() const;
+	
 protected:
 	// Collision body used by Mover.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
