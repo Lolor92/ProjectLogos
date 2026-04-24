@@ -7,11 +7,10 @@
 
 class UAbilitySystemComponent;
 class UPL_AbilitySystemComponent;
-class UPL_AbilitySet;
 
 /**
  * PlayerState owns the player's ASC.
- * This lets GAS survive pawn respawns later.
+ * It should store GAS state, not decide combat loadout.
  */
 UCLASS()
 class PROJECTLOGOS_API APL_PlayerState : public APlayerState, public IAbilitySystemInterface
@@ -26,16 +25,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="AbilitySystem")
 	UPL_AbilitySystemComponent* GetProjectAbilitySystemComponent() const { return AbilitySystemComponent; }
 
-	void GiveStartupAbilities(UObject* SourceObject);
-
 protected:
 	// Player-owned GAS component.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UPL_AbilitySystemComponent> AbilitySystemComponent;
-
-	// Abilities granted once on the server.
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AbilitySystem")
-	TArray<TObjectPtr<UPL_AbilitySet>> AbilitySets;
-
-	bool bStartupAbilitiesGiven = false;
 };

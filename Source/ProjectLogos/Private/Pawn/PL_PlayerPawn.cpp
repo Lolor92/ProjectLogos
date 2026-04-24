@@ -1,6 +1,7 @@
 #include "Pawn/PL_PlayerPawn.h"
 
 #include "Camera/CameraComponent.h"
+#include "Combat/Components/PL_CombatComponent.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Input/PL_InputComponent.h"
@@ -59,8 +60,8 @@ void APL_PlayerPawn::InitializePlayerAbilitySystem()
 
 	InitializeAbilitySystem(PlayerASC, PLPlayerState);
 
-	if (HasAuthority())
+	if (CombatComponent)
 	{
-		PLPlayerState->GiveStartupAbilities(this);
+		CombatComponent->InitializeCombat(this, PlayerASC);
 	}
 }

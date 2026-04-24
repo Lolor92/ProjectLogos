@@ -11,6 +11,7 @@ class UCharacterMoverComponent;
 class UPL_MoverPawnComponent;
 class UAbilitySystemComponent;
 class UPL_AbilitySystemComponent;
+class UPL_CombatComponent;
 
 /**
  * Shared base pawn body.
@@ -41,6 +42,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Components")
 	UPL_MoverPawnComponent* GetMoverPawnComponent() const { return MoverPawnComponent; }
 
+	UFUNCTION(BlueprintPure, Category="Components")
+	UPL_CombatComponent* GetCombatComponent() const { return CombatComponent; }
+
 	UFUNCTION(BlueprintPure, Category="Mover")
 	FVector GetMoverVelocity() const;
 
@@ -69,6 +73,10 @@ protected:
 	// Produces input for Mover.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UPL_MoverPawnComponent> MoverPawnComponent;
+
+	// Owns combat setup and combat ability grants.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UPL_CombatComponent> CombatComponent;
 
 	// ASC currently used by this pawn.
 	// For players, this comes from PlayerState.

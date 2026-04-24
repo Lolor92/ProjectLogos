@@ -1,10 +1,10 @@
 #include "Pawn/BasePawn.h"
+#include "Combat/Components/PL_CombatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "Mover/PL_MoverPawnComponent.h"
-#include "GAS/Data/PL_AbilitySet.h"
 
 ABasePawn::ABasePawn()
 {
@@ -42,6 +42,9 @@ ABasePawn::ABasePawn()
 
 	// Produces input for Mover.
 	MoverPawnComponent = CreateDefaultSubobject<UPL_MoverPawnComponent>(TEXT("MoverPawnComponent"));
+
+	// Owns combat setup and ability grants.
+	CombatComponent = CreateDefaultSubobject<UPL_CombatComponent>(TEXT("CombatComponent"));
 }
 
 UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const
