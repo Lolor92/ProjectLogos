@@ -1,8 +1,10 @@
-﻿#include "Pawn/PL_PlayerPawn.h"
+#include "Pawn/PL_PlayerPawn.h"
 
 #include "Camera/CameraComponent.h"
+#include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "Input/PL_InputComponent.h"
+#include "Player/PL_PlayerState.h"
 
 APL_PlayerPawn::APL_PlayerPawn()
 {
@@ -29,4 +31,36 @@ APL_PlayerPawn::APL_PlayerPawn()
 void APL_PlayerPawn::BeginPlay()
 {
 	Super::BeginPlay();
+}
+
+void APL_PlayerPawn::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	// Server initializes the PlayerState-owned ASC.
+	InitializePlayerAbilitySystem();
+}
+
+void APL_PlayerPawn::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	// Client initializes the PlayerState-owned ASC when PlayerState arrives.
+	InitializePlayerAbilitySystem();
+}
+
+void APL_PlayerPawn::InitializePlayerAbilitySystem()
+{
+	APL_PlayerState* PLPlayerState = GetPlayerState<APL_PlayerState>();
+	if (!PLPlayerState) return;
+
+	UPL_AbilitySystemComponent* PlayerASC = PLPlayerState->GetProjectAbilitySystemComponent();
+	if (!PlayerASC) return;
+
+	InitializeAbilitySystem(PlayerASC, PLPlayerState);
+
+	if (HasAuthority())
+	{
+		PLPlayerState->GiveStartupAbilities(this);
+	}
 }

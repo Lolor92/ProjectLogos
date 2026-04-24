@@ -49,6 +49,21 @@ UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const
 	return AbilitySystemComponent;
 }
 
+void ABasePawn::InitializeAbilitySystem(
+	UPL_AbilitySystemComponent* InAbilitySystemComponent,
+	AActor* OwnerActor
+)
+{
+	if (!InAbilitySystemComponent || !OwnerActor) return;
+
+	AbilitySystemComponent = InAbilitySystemComponent;
+
+	// For players:
+	// OwnerActor = PlayerState
+	// AvatarActor = this pawn
+	AbilitySystemComponent->InitAbilityActorInfo(OwnerActor, this);
+}
+
 FVector ABasePawn::GetMoverVelocity() const
 {
 	if (!CharacterMoverComponent) return FVector::ZeroVector;

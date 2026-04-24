@@ -22,6 +22,10 @@ public:
 
 protected:
 	virtual void BeginPlay() override;
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_PlayerState() override;
+
+	void InitializePlayerAbilitySystem();
 
 	// Keeps the camera behind the player.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")

@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "AbilitySystemInterface.h"
@@ -7,6 +7,7 @@
 
 class UAbilitySystemComponent;
 class UPL_AbilitySystemComponent;
+class UPL_AbilitySet;
 
 /**
  * PlayerState owns the player's ASC.
@@ -25,8 +26,16 @@ public:
 	UFUNCTION(BlueprintPure, Category="AbilitySystem")
 	UPL_AbilitySystemComponent* GetProjectAbilitySystemComponent() const { return AbilitySystemComponent; }
 
+	void GiveStartupAbilities(UObject* SourceObject);
+
 protected:
 	// Player-owned GAS component.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UPL_AbilitySystemComponent> AbilitySystemComponent;
+
+	// Abilities granted once on the server.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="AbilitySystem")
+	TArray<TObjectPtr<UPL_AbilitySet>> AbilitySets;
+
+	bool bStartupAbilitiesGiven = false;
 };
