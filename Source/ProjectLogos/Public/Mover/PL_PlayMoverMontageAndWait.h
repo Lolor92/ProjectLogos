@@ -7,6 +7,7 @@
 
 class UAnimMontage;
 class UCharacterMoverComponent;
+class USkeletalMeshComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FPLPlayMoverMontageDelegate);
 
@@ -20,23 +21,19 @@ class PROJECTLOGOS_API UPL_PlayMoverMontageAndWait : public UAbilityTask
 	GENERATED_BODY()
 
 public:
-	// Called when the montage finishes normally.
 	UPROPERTY(BlueprintAssignable)
 	FPLPlayMoverMontageDelegate OnCompleted;
-	
+
 	// Called when the montage starts blending out normally.
 	UPROPERTY(BlueprintAssignable)
 	FPLPlayMoverMontageDelegate OnBlendOut;
 
-	// Called when the montage is interrupted.
 	UPROPERTY(BlueprintAssignable)
 	FPLPlayMoverMontageDelegate OnInterrupted;
 
-	// Called when the montage is cancelled by the ability.
 	UPROPERTY(BlueprintAssignable)
 	FPLPlayMoverMontageDelegate OnCancelled;
 
-	// Called if the task could not start.
 	UPROPERTY(BlueprintAssignable)
 	FPLPlayMoverMontageDelegate OnFailed;
 
@@ -47,14 +44,15 @@ public:
 		BlueprintInternalUseOnly="true"
 	))
 	static UPL_PlayMoverMontageAndWait* PlayMoverMontageAndWait(
-		UGameplayAbility* OwningAbility,
-		FName TaskInstanceName,
-		UAnimMontage* MontageToPlay,
-		float PlayRate = 1.f,
-		FName StartSection = NAME_None,
-		float RootMotionTranslationScale = 1.f,
-		EPLRootMotionCollisionStopMode CollisionStopMode = EPLRootMotionCollisionStopMode::None,
-		bool bStopWhenAbilityEnds = true
+	UGameplayAbility* OwningAbility,
+	FName TaskInstanceName,
+	UAnimMontage* MontageToPlay,
+	float PlayRate = 1.f,
+	FName StartSection = NAME_None,
+	float RootMotionTranslationScale = 1.f,
+	EPLRootMotionCollisionStopMode CollisionStopMode = EPLRootMotionCollisionStopMode::None,
+	bool bStopWhenAbilityEnds = true,
+	bool bDisableAnimRootMotion = true
 	);
 
 	virtual void Activate() override;
@@ -83,10 +81,16 @@ protected:
 
 	bool bStopWhenAbilityEnds = true;
 	bool bPlayedMontage = false;
-
+	
+	// If true, AnimInstance plays the pose but Mover handles movement.
+	bool bDisableAnimRootMotion = true;
+	
 	void OnMontageBlendingOut(UAnimMontage* InMontage, bool bInterrupted);
 	void OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted);
-
+	
+	bool PlayScaledMoverMontage();
+	void QueueScaledRootMotionMove(float StartingMontagePosition);
+	
 	void StopPlayingMontage();
 
 	UCharacterMoverComponent* FindCharacterMoverComponent() const;

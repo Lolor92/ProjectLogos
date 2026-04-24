@@ -4,7 +4,10 @@
 #include "Animation/AnimInstance.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Actor.h"
+#include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Mover/PL_ScaledAnimRootMotionLayeredMove.h"
+
 
 UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWait(
 	UGameplayAbility* OwningAbility,
@@ -14,7 +17,8 @@ UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWai
 	FName StartSection,
 	float RootMotionTranslationScale,
 	EPLRootMotionCollisionStopMode CollisionStopMode,
-	bool bStopWhenAbilityEnds
+	bool bStopWhenAbilityEnds,
+	bool bDisableAnimRootMotion
 )
 {
 	UPL_PlayMoverMontageAndWait* Task =
@@ -26,6 +30,7 @@ UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWai
 	Task->RootMotionTranslationScale = RootMotionTranslationScale;
 	Task->CollisionStopMode = CollisionStopMode;
 	Task->bStopWhenAbilityEnds = bStopWhenAbilityEnds;
+	Task->bDisableAnimRootMotion = bDisableAnimRootMotion;
 
 	return Task;
 }
@@ -47,11 +52,11 @@ void UPL_PlayMoverMontageAndWait::Activate()
 		return;
 	}
 
-	USkeletalMeshComponent* MeshComponent = ASC->GetAvatarActor()
-		? ASC->GetAvatarActor()->FindComponentByClass<USkeletalMeshComponent>()
-		: nullptr;
+	MeshComponent = ASC->GetAvatarActor()
+	? ASC->GetAvatarActor()->FindComponentByClass<USkeletalMeshComponent>()
+	: nullptr;
 
-	UAnimInstance* AnimInstance = MeshComponent
+	AnimInstance = MeshComponent
 		? MeshComponent->GetAnimInstance()
 		: nullptr;
 
@@ -71,24 +76,105 @@ void UPL_PlayMoverMontageAndWait::Activate()
 		return;
 	}
 
-	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
-
-	if (MontageLength <= 0.f)
+	if (!PlayScaledMoverMontage())
 	{
 		OnFailed.Broadcast();
 		EndTask();
 		return;
 	}
+}
+
+bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
+{
+	if (!AnimInstance || !MontageToPlay) return false;
+	
+	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
+
+	if (MontageLength <= 0.f) return false;
 
 	if (StartSection != NAME_None)
 	{
 		AnimInstance->Montage_JumpToSection(StartSection, MontageToPlay);
 	}
+	
+	FAnimMontageInstance* MontageInstance =
+	AnimInstance->GetActiveInstanceForMontage(MontageToPlay);
+
+	if (!MontageInstance) return false;
+
+	if (bDisableAnimRootMotion && PlayRate != 0.f && MontageToPlay->HasRootMotion())
+	{
+		// Disable normal montage root motion. Mover will apply it instead.
+		MontageInstance->PushDisableRootMotion();
+
+		// Queue Mover root motion starting from the current montage position.
+		QueueScaledRootMotionMove(MontageInstance->GetPosition());
+	}
+
+	// Listen for montage blend-out and end so the task can finish cleanly.
+	FOnMontageBlendingOutStarted BlendOutDelegate;
+	BlendOutDelegate.BindUObject(this, &UPL_PlayMoverMontageAndWait::OnMontageBlendingOut);
+	AnimInstance->Montage_SetBlendingOutDelegate(BlendOutDelegate, MontageToPlay);
+
+	FOnMontageEnded EndDelegate;
+	EndDelegate.BindUObject(this, &UPL_PlayMoverMontageAndWait::OnMontageEnded);
+	AnimInstance->Montage_SetEndDelegate(EndDelegate, MontageToPlay);
 
 	bPlayedMontage = true;
 
-	// For now, this only proves the task can play the montage.
-	// Next chunk queues the Mover root-motion layered move.
+	return true;
+}
+
+void UPL_PlayMoverMontageAndWait::QueueScaledRootMotionMove(float StartingMontagePosition)
+{
+	if (!CharacterMoverComponent || !MontageToPlay) return;
+
+	TSharedPtr<FPL_ScaledAnimRootMotionLayeredMove> RootMotionMove =
+		MakeShared<FPL_ScaledAnimRootMotionLayeredMove>();
+
+	RootMotionMove->MontageState.Montage = MontageToPlay;
+	RootMotionMove->MontageState.PlayRate = PlayRate;
+	RootMotionMove->MontageState.StartingMontagePosition = StartingMontagePosition;
+	RootMotionMove->MontageState.CurrentPosition = StartingMontagePosition;
+
+	RootMotionMove->RootMotionTranslationScale = RootMotionTranslationScale;
+	RootMotionMove->RootMotionCollisionStopMode = CollisionStopMode;
+
+	// Match the montage duration, adjusted by play rate.
+	const float DurationSeconds = MontageToPlay->GetPlayLength() / FMath::Max(PlayRate, UE_KINDA_SMALL_NUMBER);
+	RootMotionMove->DurationMs = DurationSeconds * 1000.f;
+
+	// Root motion should override normal movement while active.
+	RootMotionMove->MixMode = EMoveMixMode::OverrideAll;
+
+	CharacterMoverComponent->QueueLayeredMove(RootMotionMove);
+}
+
+void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, bool bInterrupted)
+{
+	if (InMontage != MontageToPlay) return;
+
+	if (!ShouldBroadcastAbilityTaskDelegates()) return;
+
+	if (bInterrupted)
+	{
+		OnInterrupted.Broadcast();
+		return;
+	}
+
+	OnBlendOut.Broadcast();
+}
+
+void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted)
+{
+	if (InMontage != MontageToPlay) return;
+
+	if (ShouldBroadcastAbilityTaskDelegates() && !bInterrupted)
+	{
+		OnCompleted.Broadcast();
+	}
+
+	EndTask();
 }
 
 void UPL_PlayMoverMontageAndWait::ExternalCancel()
@@ -109,17 +195,7 @@ void UPL_PlayMoverMontageAndWait::OnDestroy(bool bInOwnerFinished)
 
 void UPL_PlayMoverMontageAndWait::StopPlayingMontage()
 {
-	if (!bPlayedMontage || !Ability || !MontageToPlay) return;
-
-	UAbilitySystemComponent* ASC = AbilitySystemComponent.Get();
-	if (!ASC || !ASC->GetAvatarActor()) return;
-
-	USkeletalMeshComponent* MeshComponent =
-		ASC->GetAvatarActor()->FindComponentByClass<USkeletalMeshComponent>();
-
-	UAnimInstance* AnimInstance = MeshComponent
-		? MeshComponent->GetAnimInstance()
-		: nullptr;
+	if (!bPlayedMontage || !MontageToPlay) return;
 
 	if (!AnimInstance) return;
 
