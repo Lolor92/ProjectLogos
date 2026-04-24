@@ -2,11 +2,10 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GAS/Data/PL_AbilitySet.h"
 #include "PL_CombatComponent.generated.h"
 
 class ABasePawn;
-class UAbilitySystemComponent;
-class UPL_AbilitySet;
 class UPL_AbilitySystemComponent;
 
 /**
@@ -45,6 +44,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UPL_AbilitySystemComponent> AbilitySystemComponent = nullptr;
+
+	UPROPERTY(Transient)
+	FPLAbilitySet_GrantedHandles GrantedHandles;
 
 	bool bDefaultAbilitiesGranted = false;
 };

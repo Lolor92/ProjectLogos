@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Engine/DataAsset.h"
+#include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
 #include "PL_AbilitySet.generated.h"
 
@@ -27,6 +28,21 @@ struct FPLAbilitySet_GameplayAbility
 	FGameplayTag InputTag;
 };
 
+USTRUCT(BlueprintType)
+struct FPLAbilitySet_GrantedHandles
+{
+	GENERATED_BODY()
+
+public:
+	void AddAbilitySpecHandle(const FGameplayAbilitySpecHandle& Handle);
+	void TakeFromAbilitySystem(UAbilitySystemComponent* AbilitySystemComponent);
+	bool HasAnyHandles() const { return AbilitySpecHandles.Num() > 0; }
+
+private:
+	UPROPERTY()
+	TArray<FGameplayAbilitySpecHandle> AbilitySpecHandles;
+};
+
 /**
  * Data asset used to grant a group of abilities to an ASC.
  * Example: player starter abilities, enemy abilities, weapon abilities.
@@ -37,7 +53,11 @@ class PROJECTLOGOS_API UPL_AbilitySet : public UDataAsset
 	GENERATED_BODY()
 
 public:
-	void GiveToAbilitySystem(UAbilitySystemComponent* AbilitySystemComponent, UObject* SourceObject = nullptr) const;
+	void GiveToAbilitySystem(
+		UAbilitySystemComponent* AbilitySystemComponent,
+		FPLAbilitySet_GrantedHandles* OutGrantedHandles,
+		UObject* SourceObject = nullptr
+	) const;
 
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Abilities")

@@ -1,17 +1,51 @@
-﻿#include "GAS/Data/PL_AbilitySet.h"
+#include "GAS/Data/PL_AbilitySet.h"
+
 #include "AbilitySystemComponent.h"
 #include "Abilities/GameplayAbility.h"
 
+void FPLAbilitySet_GrantedHandles::AddAbilitySpecHandle(const FGameplayAbilitySpecHandle& Handle)
+{
+	if (Handle.IsValid())
+	{
+		AbilitySpecHandles.Add(Handle);
+	}
+}
+
+void FPLAbilitySet_GrantedHandles::TakeFromAbilitySystem(UAbilitySystemComponent* AbilitySystemComponent)
+{
+	if (!AbilitySystemComponent)
+	{
+		return;
+	}
+
+	for (const FGameplayAbilitySpecHandle& Handle : AbilitySpecHandles)
+	{
+		if (Handle.IsValid())
+		{
+			AbilitySystemComponent->ClearAbility(Handle);
+		}
+	}
+
+	AbilitySpecHandles.Reset();
+}
+
 void UPL_AbilitySet::GiveToAbilitySystem(
 	UAbilitySystemComponent* AbilitySystemComponent,
+	FPLAbilitySet_GrantedHandles* OutGrantedHandles,
 	UObject* SourceObject
 ) const
 {
-	if (!AbilitySystemComponent) return;
+	if (!AbilitySystemComponent)
+	{
+		return;
+	}
 
 	for (const FPLAbilitySet_GameplayAbility& AbilityToGrant : GrantedGameplayAbilities)
 	{
-		if (!AbilityToGrant.Ability) continue;
+		if (!AbilityToGrant.Ability)
+		{
+			continue;
+		}
 
 		FGameplayAbilitySpec AbilitySpec(
 			AbilityToGrant.Ability,
@@ -26,6 +60,12 @@ void UPL_AbilitySet::GiveToAbilitySystem(
 			AbilitySpec.GetDynamicSpecSourceTags().AddTag(AbilityToGrant.InputTag);
 		}
 
-		AbilitySystemComponent->GiveAbility(AbilitySpec);
+		const FGameplayAbilitySpecHandle AbilitySpecHandle =
+			AbilitySystemComponent->GiveAbility(AbilitySpec);
+
+		if (OutGrantedHandles)
+		{
+			OutGrantedHandles->AddAbilitySpecHandle(AbilitySpecHandle);
+		}
 	}
 }

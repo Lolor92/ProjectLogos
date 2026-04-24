@@ -1,32 +1,50 @@
-﻿#include "Input/PL_InputComponent.h"
+#include "Input/PL_InputComponent.h"
+
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
+#include "Camera/CameraComponent.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "GameplayAbilitySpec.h"
-#include "Input/PL_InputConfig.h"
-#include "InputActionValue.h"
 #include "GAS/Abilities/PL_GameplayAbility.h"
+#include "Input/PL_InputConfig.h"
+#include "Input/Tag/PL_InputTags.h"
+#include "InputActionValue.h"
 #include "Mover/PL_MoverPawnComponent.h"
 #include "Pawn/BasePawn.h"
-#include "Input/Tag/PL_InputTags.h"
 
 UPL_InputComponent::UPL_InputComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
 
 	MoveInputTag = TAG_Input_Move;
 	LookInputTag = TAG_Input_Look;
+	ZoomInputTag = TAG_Input_Zoom;
 }
 
 void UPL_InputComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	if (!IsLocallyControlledOwner()) return;
+	InitializePlayerInput();
+}
+
+void UPL_InputComponent::InitializePlayerInput()
+{
+	if (!IsLocallyControlledOwner())
+	{
+		return;
+	}
+
+	if (InjectedEnhancedInputComponent)
+	{
+		return;
+	}
 
 	InstallInput();
 }
@@ -38,12 +56,52 @@ void UPL_InputComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void UPL_InputComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction
+)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	USpringArmComponent* SpringArm = FindSpringArm();
+	if (!SpringArm)
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+
+	SpringArm->TargetArmLength = FMath::FInterpTo(
+		SpringArm->TargetArmLength,
+		DesiredZoomArmLength,
+		DeltaTime,
+		ZoomInterpSpeed
+	);
+
+	if (FMath::IsNearlyEqual(SpringArm->TargetArmLength, DesiredZoomArmLength, 1.f))
+	{
+		SpringArm->TargetArmLength = DesiredZoomArmLength;
+		SetComponentTickEnabled(false);
+	}
+}
+
 void UPL_InputComponent::InstallInput()
 {
 	APlayerController* PlayerController = GetOwningPlayerController();
 	if (!PlayerController || !PlayerController->IsLocalController()) return;
 
 	CachedPlayerController = PlayerController;
+	CachedSpringArm = FindSpringArm();
+	CachedCamera = FindCamera();
+
+	if (USpringArmComponent* SpringArm = CachedSpringArm.Get())
+	{
+		DesiredZoomArmLength = SpringArm->TargetArmLength;
+	}
+	else
+	{
+		DesiredZoomArmLength = ZoomLevel * ZoomStepDistance;
+	}
 
 	AddMappingContexts();
 
@@ -87,6 +145,11 @@ void UPL_InputComponent::UninstallInput()
 	}
 
 	CachedAbilitySystemComponent = nullptr;
+	CachedSpringArm = nullptr;
+	CachedCamera = nullptr;
+	DesiredZoomArmLength = 0.f;
+	SetComponentTickEnabled(false);
+
 	CachedPlayerController = nullptr;
 }
 
@@ -182,6 +245,18 @@ void UPL_InputComponent::BindInputActions()
 			continue;
 		}
 
+		if (Entry.InputTag.MatchesTagExact(ZoomInputTag))
+		{
+			InjectedEnhancedInputComponent->BindAction(
+				Entry.InputAction,
+				ETriggerEvent::Triggered,
+				this,
+				&ThisClass::Zoom
+			);
+
+			continue;
+		}
+
 		// Any other tagged input is treated as GAS ability input.
 		InjectedEnhancedInputComponent->BindAction(
 			Entry.InputAction,
@@ -251,6 +326,53 @@ void UPL_InputComponent::Look(const FInputActionValue& Value)
 
 	PlayerController->AddYawInput(LookInput.X);
 	PlayerController->AddPitchInput(LookInput.Y);
+}
+
+void UPL_InputComponent::Zoom(const FInputActionValue& Value)
+{
+	if (!bEnableZoom || MaxZoomLevel < MinZoomLevel)
+	{
+		return;
+	}
+
+	const float InputAxisValue = Value.Get<float>();
+	if (FMath::IsNearlyZero(InputAxisValue))
+	{
+		return;
+	}
+
+	if (InputAxisValue > 0.f && ZoomLevel > MinZoomLevel)
+	{
+		--ZoomLevel;
+		ApplyZoom();
+	}
+	else if (InputAxisValue < 0.f && ZoomLevel < MaxZoomLevel)
+	{
+		++ZoomLevel;
+		ApplyZoom();
+	}
+}
+
+void UPL_InputComponent::ApplyZoom()
+{
+	USpringArmComponent* SpringArm = FindSpringArm();
+	if (!SpringArm)
+	{
+		return;
+	}
+
+	DesiredZoomArmLength = ZoomLevel * ZoomStepDistance;
+	SetComponentTickEnabled(true);
+
+	if (UCameraComponent* Camera = FindCamera())
+	{
+		const FVector CameraOffset =
+			ZoomLevel == MinZoomLevel
+				? ClosestZoomCameraOffset
+				: DefaultCameraOffset;
+
+		Camera->SetRelativeLocation(CameraOffset);
+	}
 }
 
 void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
@@ -461,4 +583,34 @@ UAbilitySystemComponent* UPL_InputComponent::GetAbilitySystemComponent() const
 	const_cast<UPL_InputComponent*>(this)->CachedAbilitySystemComponent = ASC;
 
 	return ASC;
+}
+
+USpringArmComponent* UPL_InputComponent::FindSpringArm() const
+{
+	if (CachedSpringArm)
+	{
+		return CachedSpringArm;
+	}
+
+	if (const APawn* OwnerPawn = Cast<APawn>(GetOwner()))
+	{
+		return OwnerPawn->FindComponentByClass<USpringArmComponent>();
+	}
+
+	return nullptr;
+}
+
+UCameraComponent* UPL_InputComponent::FindCamera() const
+{
+	if (CachedCamera)
+	{
+		return CachedCamera;
+	}
+
+	if (const APawn* OwnerPawn = Cast<APawn>(GetOwner()))
+	{
+		return OwnerPawn->FindComponentByClass<UCameraComponent>();
+	}
+
+	return nullptr;
 }

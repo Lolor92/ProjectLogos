@@ -40,6 +40,11 @@ void APL_PlayerPawn::PossessedBy(AController* NewController)
 
 	// Server initializes the PlayerState-owned ASC.
 	InitializePlayerAbilitySystem();
+
+	if (PlayerInputComponent)
+	{
+		PlayerInputComponent->InitializePlayerInput();
+	}
 }
 
 void APL_PlayerPawn::OnRep_PlayerState()
@@ -48,6 +53,16 @@ void APL_PlayerPawn::OnRep_PlayerState()
 
 	// Client initializes the PlayerState-owned ASC when PlayerState arrives.
 	InitializePlayerAbilitySystem();
+}
+
+void APL_PlayerPawn::PawnClientRestart()
+{
+	Super::PawnClientRestart();
+
+	if (PlayerInputComponent)
+	{
+		PlayerInputComponent->InitializePlayerInput();
+	}
 }
 
 void APL_PlayerPawn::InitializePlayerAbilitySystem()
