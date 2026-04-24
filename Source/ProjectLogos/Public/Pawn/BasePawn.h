@@ -1,10 +1,14 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #pragma once
 
 #include "CoreMinimal.h"
 #include "GameFramework/Pawn.h"
 #include "BasePawn.generated.h"
+
+class UCapsuleComponent;
+class USkeletalMeshComponent;
+class UCharacterMoverComponent;
+class UPL_MoverPawnComponent;
+
 
 UCLASS()
 class PROJECTLOGOS_API ABasePawn : public APawn
@@ -12,18 +16,34 @@ class PROJECTLOGOS_API ABasePawn : public APawn
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this pawn's properties
 	ABasePawn();
+	
+	UFUNCTION(BlueprintPure, Category="Components")
+	UCapsuleComponent* GetCapsuleComponent() const { return CapsuleComponent; }
+
+	UFUNCTION(BlueprintPure, Category="Components")
+	USkeletalMeshComponent* GetMeshComponent() const { return MeshComponent; }
+
+	UFUNCTION(BlueprintPure, Category="Components")
+	UCharacterMoverComponent* GetCharacterMoverComponent() const { return CharacterMoverComponent; }
+
+	UFUNCTION(BlueprintPure, Category="Components")
+	UPL_MoverPawnComponent* GetMoverPawnComponent() const { return MoverPawnComponent; }
 
 protected:
-	// Called when the game starts or when spawned
-	virtual void BeginPlay() override;
+	// Collision body used by Mover.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
-public:	
-	// Called every frame
-	virtual void Tick(float DeltaTime) override;
+	// Main visible character mesh.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<USkeletalMeshComponent> MeshComponent;
 
-	// Called to bind functionality to input
-	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
-
+	// Unreal Mover movement component.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UCharacterMoverComponent> CharacterMoverComponent;
+	
+	// Produces movement input for CharacterMoverComponent.
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+	TObjectPtr<UPL_MoverPawnComponent> MoverPawnComponent;
 };
