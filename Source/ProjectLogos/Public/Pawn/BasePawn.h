@@ -1,17 +1,21 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/Pawn.h"
 #include "AbilitySystemInterface.h"
+#include "GameFramework/Pawn.h"
 #include "BasePawn.generated.h"
 
 class UCapsuleComponent;
 class USkeletalMeshComponent;
 class UCharacterMoverComponent;
 class UPL_MoverPawnComponent;
+class UAbilitySystemComponent;
 class UPL_AbilitySystemComponent;
 
-
+/**
+ * Shared base pawn body.
+ * Player and NPC pawns inherit from this.
+ */
 UCLASS()
 class PROJECTLOGOS_API ABasePawn : public APawn, public IAbilitySystemInterface
 {
@@ -19,9 +23,9 @@ class PROJECTLOGOS_API ABasePawn : public APawn, public IAbilitySystemInterface
 
 public:
 	ABasePawn();
-	
+
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
-	
+
 	UFUNCTION(BlueprintPure, Category="AbilitySystem")
 	UPL_AbilitySystemComponent* GetProjectAbilitySystemComponent() const { return AbilitySystemComponent; }
 
@@ -39,33 +43,35 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Mover")
 	FVector GetMoverVelocity() const;
-	
+
 	UFUNCTION(BlueprintPure, Category="Mover")
 	float GetGroundSpeed() const;
-	
+
 	UFUNCTION(BlueprintPure, Category="Mover")
 	bool IsMoving() const;
-	
+
 protected:
-	virtual void BeginPlay() override;
-	
-	// Collision body used by Mover.
+	// Initializes this pawn as the avatar for an ASC.
+	void InitializeAbilitySystem(UPL_AbilitySystemComponent* InAbilitySystemComponent, AActor* OwnerActor);
+
+	// Main collision body. Mover moves this.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UCapsuleComponent> CapsuleComponent;
 
-	// Main visible character mesh.
+	// Visible character mesh.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<USkeletalMeshComponent> MeshComponent;
 
-	// Unreal Mover movement component.
+	// Mover movement simulation component.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UCharacterMoverComponent> CharacterMoverComponent;
-	
-	// Produces movement input for CharacterMoverComponent.
+
+	// Produces input for Mover.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
 	TObjectPtr<UPL_MoverPawnComponent> MoverPawnComponent;
-	
-	// Project GAS component used by this pawn.
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")
+
+	// ASC currently used by this pawn.
+	// For players, this comes from PlayerState.
+	UPROPERTY(BlueprintReadOnly, Category="AbilitySystem")
 	TObjectPtr<UPL_AbilitySystemComponent> AbilitySystemComponent;
 };

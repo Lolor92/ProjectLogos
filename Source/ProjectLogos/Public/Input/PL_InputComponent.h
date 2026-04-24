@@ -2,14 +2,31 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "GameplayAbilitySpecHandle.h"
 #include "GameplayTagContainer.h"
+#include "TimerManager.h"
 #include "PL_InputComponent.generated.h"
 
 class APlayerController;
 class UAbilitySystemComponent;
 class UEnhancedInputComponent;
+class UGameplayAbility;
 class UPL_InputConfig;
+struct FGameplayAbilitySpec;
 struct FInputActionValue;
+
+// Input-owned combo window for one starter ability.
+struct FPLActiveComboChain
+{
+	// Starter ability that owns this input chain.
+	FGameplayAbilitySpecHandle CurrentAbilityHandle;
+
+	// Next ability to activate when the same input is pressed again.
+	TSubclassOf<UGameplayAbility> NextAbilityClass = nullptr;
+
+	// Separate timeout per starter ability.
+	FTimerHandle TimerHandle;
+};
 
 /**
  * Pawn-owned input bridge.
@@ -45,12 +62,20 @@ private:
 	void HandleAbilityInputPressed(FGameplayTag InputTag);
 	void HandleAbilityInputReleased(FGameplayTag InputTag);
 
+	bool TryActivateComboAbility(const FGameplayAbilitySpec& RequestedAbilitySpec);
+	void UpdateComboChain(FGameplayAbilitySpecHandle StarterHandle, const FGameplayAbilitySpec& CurrentAbilitySpec);
+	void ClearComboChain(FGameplayAbilitySpecHandle StarterHandle);
+	void ClearAllComboChains();
+
 	bool IsLocallyControlledOwner() const;
 	APlayerController* GetOwningPlayerController() const;
 	UAbilitySystemComponent* GetAbilitySystemComponent() const;
 
 	FGameplayTag MoveInputTag;
 	FGameplayTag LookInputTag;
+
+	// Active combo chains by starter ability.
+	TMap<FGameplayAbilitySpecHandle, FPLActiveComboChain> ActiveComboChains;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UEnhancedInputComponent> InjectedEnhancedInputComponent = nullptr;

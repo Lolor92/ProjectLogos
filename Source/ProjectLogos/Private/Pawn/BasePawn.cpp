@@ -4,6 +4,7 @@
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "Mover/PL_MoverPawnComponent.h"
+#include "GAS/Data/PL_AbilitySet.h"
 
 ABasePawn::ABasePawn()
 {
@@ -41,24 +42,6 @@ ABasePawn::ABasePawn()
 
 	// Produces input for Mover.
 	MoverPawnComponent = CreateDefaultSubobject<UPL_MoverPawnComponent>(TEXT("MoverPawnComponent"));
-	
-	// Project GAS component.
-	AbilitySystemComponent = CreateDefaultSubobject<UPL_AbilitySystemComponent>(TEXT("AbilitySystemComponent"));
-
-	// Replicate abilities/effects through GAS.
-	AbilitySystemComponent->SetIsReplicated(true);
-
-	AbilitySystemComponent->SetReplicationMode(EGameplayEffectReplicationMode::Mixed);
-}
-
-void ABasePawn::BeginPlay()
-{
-	Super::BeginPlay();
-
-	if (!AbilitySystemComponent) return;
-
-	// For now, the pawn is both the owner and the avatar.
-	AbilitySystemComponent->InitAbilityActorInfo(this, this);
 }
 
 UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const

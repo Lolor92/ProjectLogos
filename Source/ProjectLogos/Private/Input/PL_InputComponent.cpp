@@ -1,5 +1,4 @@
 ﻿#include "Input/PL_InputComponent.h"
-
 #include "AbilitySystemComponent.h"
 #include "AbilitySystemInterface.h"
 #include "EnhancedInputComponent.h"
@@ -10,16 +9,17 @@
 #include "GameplayAbilitySpec.h"
 #include "Input/PL_InputConfig.h"
 #include "InputActionValue.h"
+#include "GAS/Abilities/PL_GameplayAbility.h"
 #include "Mover/PL_MoverPawnComponent.h"
 #include "Pawn/BasePawn.h"
+#include "Input/Tag/PL_InputTags.h"
 
 UPL_InputComponent::UPL_InputComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
 
-	// These tags must exist in Project Settings -> Gameplay Tags.
-	MoveInputTag = FGameplayTag::RequestGameplayTag(TEXT("Input.Move"));
-	LookInputTag = FGameplayTag::RequestGameplayTag(TEXT("Input.Look"));
+	MoveInputTag = TAG_Input_Move;
+	LookInputTag = TAG_Input_Look;
 }
 
 void UPL_InputComponent::BeginPlay()
@@ -66,6 +66,7 @@ void UPL_InputComponent::InstallInput()
 void UPL_InputComponent::UninstallInput()
 {
 	RemoveMappingContexts();
+	ClearAllComboChains();
 
 	if (APlayerController* PlayerController = CachedPlayerController.Get())
 	{
@@ -255,7 +256,7 @@ void UPL_InputComponent::Look(const FInputActionValue& Value)
 void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
 {
 	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
-	if (!ASC) return;
+	if (!ASC || !InputTag.IsValid()) return;
 
 	for (FGameplayAbilitySpec& AbilitySpec : ASC->GetActivatableAbilities())
 	{
@@ -265,25 +266,32 @@ void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
 
 		if (!bMatchesInputTag) continue;
 
-		ASC->AbilitySpecInputPressed(AbilitySpec);
+		// If this starter ability has an active combo chain, trigger the next ability.
+		if (TryActivateComboAbility(AbilitySpec)) return;
 
+		// Otherwise activate the starter ability normally.
 		const bool bActivated = ASC->TryActivateAbility(AbilitySpec.Handle);
 
 		if (bActivated)
 		{
-			FPredictionKey PredictionKey;
-
-			if (UGameplayAbility* PrimaryInstance = AbilitySpec.GetPrimaryInstance())
-			{
-				PredictionKey = PrimaryInstance->GetCurrentActivationInfo().GetActivationPredictionKey();
-			}
-
-			ASC->InvokeReplicatedEvent(
-				EAbilityGenericReplicatedEvent::InputPressed,
-				AbilitySpec.Handle,
-				PredictionKey
-			);
+			UpdateComboChain(AbilitySpec.Handle, AbilitySpec);
 		}
+
+		ASC->AbilitySpecInputPressed(AbilitySpec);
+
+		FPredictionKey PredictionKey;
+
+		if (UGameplayAbility* PrimaryInstance = AbilitySpec.GetPrimaryInstance())
+		{
+			PredictionKey = PrimaryInstance->GetCurrentActivationInfo().GetActivationPredictionKey();
+		}
+
+		// Keep server-side ability input state in sync.
+		ASC->InvokeReplicatedEvent(
+			EAbilityGenericReplicatedEvent::InputPressed,
+			AbilitySpec.Handle,
+			PredictionKey
+		);
 	}
 }
 
@@ -315,6 +323,113 @@ void UPL_InputComponent::HandleAbilityInputReleased(FGameplayTag InputTag)
 			PredictionKey
 		);
 	}
+}
+
+bool UPL_InputComponent::TryActivateComboAbility(const FGameplayAbilitySpec& RequestedAbilitySpec)
+{
+	UAbilitySystemComponent* ASC = GetAbilitySystemComponent();
+	if (!ASC) return false;
+
+	// The pressed starter ability is the key for this chain.
+	FPLActiveComboChain* ComboChain = ActiveComboChains.Find(RequestedAbilitySpec.Handle);
+
+	if (!ComboChain || !ComboChain->NextAbilityClass)
+	{
+		return false;
+	}
+
+	for (FGameplayAbilitySpec& ComboSpec : ASC->GetActivatableAbilities())
+	{
+		if (!ComboSpec.Ability) continue;
+
+		const bool bIsNextComboAbility =
+			ComboSpec.Ability->GetClass()->IsChildOf(ComboChain->NextAbilityClass);
+
+		if (!bIsNextComboAbility) continue;
+
+		const bool bActivated = ASC->TryActivateAbility(ComboSpec.Handle);
+
+		if (bActivated)
+		{
+			// Keep the original starter handle, but advance the combo target.
+			UpdateComboChain(RequestedAbilitySpec.Handle, ComboSpec);
+		}
+
+		// Consume the input even if cooldown/cost blocks the combo target.
+		return true;
+	}
+
+	ClearComboChain(RequestedAbilitySpec.Handle);
+	return true;
+}
+
+void UPL_InputComponent::UpdateComboChain(
+	FGameplayAbilitySpecHandle StarterHandle,
+	const FGameplayAbilitySpec& CurrentAbilitySpec
+)
+{
+	// Prefer the live instance, then fall back to the class default object.
+	UPL_GameplayAbility* CurrentAbility = Cast<UPL_GameplayAbility>(CurrentAbilitySpec.GetPrimaryInstance());
+
+	if (!CurrentAbility)
+	{
+		CurrentAbility = Cast<UPL_GameplayAbility>(CurrentAbilitySpec.Ability);
+	}
+
+	if (!CurrentAbility ||
+		!CurrentAbility->GetComboAbilityClass() ||
+		CurrentAbility->GetComboWindowDuration() <= 0.f)
+	{
+		ClearComboChain(StarterHandle);
+		return;
+	}
+
+	FPLActiveComboChain& ComboChain = ActiveComboChains.FindOrAdd(StarterHandle);
+	ComboChain.CurrentAbilityHandle = CurrentAbilitySpec.Handle;
+	ComboChain.NextAbilityClass = CurrentAbility->GetComboAbilityClass();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ComboChain.TimerHandle);
+
+		FTimerDelegate TimerDelegate =
+			FTimerDelegate::CreateUObject(this, &ThisClass::ClearComboChain, StarterHandle);
+
+		World->GetTimerManager().SetTimer(
+			ComboChain.TimerHandle,
+			TimerDelegate,
+			CurrentAbility->GetComboWindowDuration(),
+			false
+		);
+	}
+}
+
+void UPL_InputComponent::ClearComboChain(FGameplayAbilitySpecHandle StarterHandle)
+{
+	if (FPLActiveComboChain* ComboChain = ActiveComboChains.Find(StarterHandle))
+	{
+		if (UWorld* World = GetWorld())
+		{
+			World->GetTimerManager().ClearTimer(ComboChain->TimerHandle);
+		}
+	}
+
+	ActiveComboChains.Remove(StarterHandle);
+}
+
+void UPL_InputComponent::ClearAllComboChains()
+{
+	UWorld* World = GetWorld();
+
+	for (TPair<FGameplayAbilitySpecHandle, FPLActiveComboChain>& ComboChainPair : ActiveComboChains)
+	{
+		if (World)
+		{
+			World->GetTimerManager().ClearTimer(ComboChainPair.Value.TimerHandle);
+		}
+	}
+
+	ActiveComboChains.Reset();
 }
 
 bool UPL_InputComponent::IsLocallyControlledOwner() const
