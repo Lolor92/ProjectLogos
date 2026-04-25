@@ -119,9 +119,6 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
 	void ResetAbilityAnimState();
 
-	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
-	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
-
 	UFUNCTION(BlueprintPure, Category="Ability|Animation")
 	const FPLRepAbilityAnimState& GetAbilityAnimState() const { return AbilityAnimState; }
 

@@ -46,64 +46,10 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			MovementRotation, ActorRotation).Yaw;
 	}
 
-	if (bShouldBlendMontage)
+	if (OwningBasePawn)
 	{
-		UAnimMontage* CurrentMontage = GetCurrentActiveMontage();
-
-		float MontagePosition = -1.f;
-		float MontageLength = -1.f;
-		float MontageWeight = -1.f;
-
-		if (CurrentMontage)
-		{
-			MontagePosition = Montage_GetPosition(CurrentMontage);
-			MontageLength = CurrentMontage->GetPlayLength();
-
-			if (FAnimMontageInstance* MontageInstance =
-				GetActiveInstanceForMontage(CurrentMontage))
-			{
-				MontageWeight = MontageInstance->GetWeight();
-			}
-		}
-
-		const ENetMode NetMode = GetWorld() ? GetWorld()->GetNetMode() : NM_MAX;
-
-		const TCHAR* NetModeText = TEXT("Unknown");
-		switch (NetMode)
-		{
-		case NM_Standalone: NetModeText = TEXT("Standalone"); break;
-		case NM_DedicatedServer: NetModeText = TEXT("DedicatedServer"); break;
-		case NM_ListenServer: NetModeText = TEXT("ListenServer"); break;
-		case NM_Client: NetModeText = TEXT("Client"); break;
-		default: break;
-		}
-
-		const APawn* PawnOwner = TryGetPawnOwner();
-
-		UE_LOG(LogTemp, Warning,
-			TEXT("ANIM_BLEND_TICK World=%s Anim=%s Pawn=%s Authority=%d Local=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
-			NetModeText,
-			*GetNameSafe(this),
-			*GetNameSafe(PawnOwner),
-			PawnOwner ? PawnOwner->HasAuthority() : false,
-			PawnOwner ? PawnOwner->IsLocallyControlled() : false,
-			bShouldBlendMontage,
-			*GetNameSafe(CurrentMontage),
-			MontagePosition,
-			MontageLength,
-			MontageWeight
-		);
+		OwningBasePawn->EnsureAbilityMontageVisual();
 	}
-
-	if (ABasePawn* BasePawn = Cast<ABasePawn>(TryGetPawnOwner()))
-	{
-		BasePawn->EnsureAbilityMontageVisual();
-	}
-}
-
-void UPL_AnimInstance::SetShouldBlendMontage(bool bNewShouldBlendMontage)
-{
-	bShouldBlendMontage = bNewShouldBlendMontage;
 }
 
 void UPL_AnimInstance::SetAbilityAnimState(
@@ -113,12 +59,4 @@ void UPL_AnimInstance::SetAbilityAnimState(
 {
 	bAbilityRootMotionActive = bNewAbilityRootMotionActive;
 	bShouldBlendMontage = bNewShouldBlendMontage;
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("ANIM_SET_ABILITY_STATE Pawn=%s Local=%d RMActive=%d Blend=%d"),
-		*GetNameSafe(TryGetPawnOwner()),
-		TryGetPawnOwner() ? TryGetPawnOwner()->IsLocallyControlled() : false,
-		bAbilityRootMotionActive,
-		bShouldBlendMontage
-	);
 }

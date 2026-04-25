@@ -107,15 +107,6 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 	
 	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
 
-	UE_LOG(LogTemp, Warning,
-		TEXT("MONTAGE_TIMING Start Montage=%s Length=%.3f PlayRate=%.3f BlendOutTime=%.3f BlendOutTrigger=%.3f"),
-		*GetNameSafe(MontageToPlay),
-		MontageToPlay ? MontageToPlay->GetPlayLength() : 0.f,
-		PlayRate,
-		MontageToPlay ? MontageToPlay->BlendOut.GetBlendTime() : 0.f,
-		MontageToPlay ? MontageToPlay->BlendOutTriggerTime : 0.f
-	);
-
 	if (MontageLength <= 0.f) return false;
 
 	if (StartSection != NAME_None)
@@ -208,25 +199,6 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 {
 	if (InMontage != MontageToPlay) return;
 
-	ABasePawn* BasePawn = GetAvatarBasePawn();
-	const float WorldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.f;
-	const float MontagePosition = AnimInstance && InMontage
-		? AnimInstance->Montage_GetPosition(InMontage)
-		: -1.f;
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("TASK_MONTAGE_BLENDOUT Time=%.3f Pawn=%s Authority=%d Local=%d Montage=%s Interrupted=%d Pos=%.3f Length=%.3f CurrentMontage=%s"),
-		WorldTime,
-		*GetNameSafe(BasePawn),
-		BasePawn ? BasePawn->HasAuthority() : false,
-		BasePawn ? BasePawn->IsLocallyControlled() : false,
-		*GetNameSafe(InMontage),
-		bInterrupted,
-		MontagePosition,
-		InMontage ? InMontage->GetPlayLength() : 0.f,
-		AnimInstance ? *GetNameSafe(AnimInstance->GetCurrentActiveMontage()) : TEXT("NoAnimInstance")
-	);
-
 	if (!ShouldBroadcastAbilityTaskDelegates()) return;
 
 	if (bInterrupted)
@@ -241,16 +213,6 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted)
 {
 	ABasePawn* BasePawn = GetAvatarBasePawn();
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("TASK_MONTAGE_ENDED Pawn=%s Authority=%d Local=%d Montage=%s Interrupted=%d CurrentMontage=%s"),
-		*GetNameSafe(BasePawn),
-		BasePawn ? BasePawn->HasAuthority() : false,
-		BasePawn ? BasePawn->IsLocallyControlled() : false,
-		*GetNameSafe(InMontage),
-		bInterrupted,
-		AnimInstance ? *GetNameSafe(AnimInstance->GetCurrentActiveMontage()) : TEXT("NoAnimInstance")
-	);
 
 	if (InMontage != MontageToPlay)
 	{

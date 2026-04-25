@@ -67,26 +67,6 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 	{
 		if (ABasePawn* BasePawn = MoverComp ? Cast<ABasePawn>(MoverComp->GetOwner()) : nullptr)
 		{
-			const float MontageLength = MontageState.Montage ? MontageState.Montage->GetPlayLength() : 0.f;
-			const float WorldTime =
-				MoverComp && MoverComp->GetWorld()
-					? MoverComp->GetWorld()->GetTimeSeconds()
-					: 0.f;
-
-			UE_LOG(LogTemp, Warning,
-				TEXT("RM_RELEASE Time=%.3f Pawn=%s Authority=%d Local=%d StartPos=%.3f ReleasePos=%.3f MontageLength=%.3f Remaining=%.3f HasInput=%d"),
-				WorldTime,
-				*GetNameSafe(BasePawn),
-				BasePawn ? BasePawn->HasAuthority() : false,
-				BasePawn ? BasePawn->IsLocallyControlled() : false,
-				ExtractionStartPosition,
-				RootMotionReleasePosition,
-				MontageLength,
-				MontageLength - ExtractionStartPosition,
-				HasMovementInput(StartState)
-			);
-
-			
 			if (BasePawn->HasAuthority() || BasePawn->IsLocallyControlled())
 			{
 				BasePawn->SetAbilityAnimStateValues(false, true);

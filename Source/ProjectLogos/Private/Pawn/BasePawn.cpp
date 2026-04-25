@@ -103,17 +103,6 @@ bool ABasePawn::IsMoving() const
 
 void ABasePawn::SetAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 {
-	UE_LOG(LogTemp, Warning,
-		TEXT("SET_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive %d->%d Blend %d->%d"),
-		*GetNameSafe(this),
-		HasAuthority(),
-		IsLocallyControlled(),
-		AbilityAnimState.bAbilityRootMotionActive,
-		NewState.bAbilityRootMotionActive,
-		AbilityAnimState.bShouldBlendMontage,
-		NewState.bShouldBlendMontage
-	);
-	
 	if (AbilityAnimState == NewState)
 	{
 		return;
@@ -148,14 +137,6 @@ void ABasePawn::SetAbilityAnimStateValues(
 	SetAbilityAnimState(NewState);
 }
 
-void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
-{
-	FPLRepAbilityAnimState NewState = AbilityAnimState;
-	NewState.bShouldBlendMontage = bNewShouldBlendMontage;
-
-	SetAbilityAnimState(NewState);
-}
-
 void ABasePawn::ResetAbilityAnimState()
 {
 	FPLRepAbilityAnimState DefaultState;
@@ -164,17 +145,6 @@ void ABasePawn::ResetAbilityAnimState()
 
 void ABasePawn::ServerSetAbilityAnimState_Implementation(const FPLRepAbilityAnimState& NewState)
 {
-	UE_LOG(LogTemp, Warning,
-		TEXT("SERVER_SET_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive %d->%d Blend %d->%d"),
-		*GetNameSafe(this),
-		HasAuthority(),
-		IsLocallyControlled(),
-		AbilityAnimState.bAbilityRootMotionActive,
-		NewState.bAbilityRootMotionActive,
-		AbilityAnimState.bShouldBlendMontage,
-		NewState.bShouldBlendMontage
-	);
-	
 	if (AbilityAnimState == NewState)
 	{
 		return;
@@ -188,15 +158,6 @@ void ABasePawn::ServerSetAbilityAnimState_Implementation(const FPLRepAbilityAnim
 
 void ABasePawn::OnRep_AbilityAnimState()
 {
-	UE_LOG(LogTemp, Warning,
-		TEXT("ONREP_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive=%d Blend=%d"),
-		*GetNameSafe(this),
-		HasAuthority(),
-		IsLocallyControlled(),
-		AbilityAnimState.bAbilityRootMotionActive,
-		AbilityAnimState.bShouldBlendMontage
-	);
-	
 	ApplyAbilityAnimState(AbilityAnimState);
 }
 
@@ -218,51 +179,6 @@ void ABasePawn::ApplyAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 	PLAnimInstance->SetAbilityAnimState(
 		NewState.bAbilityRootMotionActive,
 		NewState.bShouldBlendMontage
-	);
-
-	UAnimMontage* CurrentMontage = PLAnimInstance->GetCurrentActiveMontage();
-
-	float MontagePosition = -1.f;
-	float MontageLength = -1.f;
-	float MontageWeight = -1.f;
-
-	if (CurrentMontage)
-	{
-		MontagePosition = PLAnimInstance->Montage_GetPosition(CurrentMontage);
-		MontageLength = CurrentMontage->GetPlayLength();
-
-		if (FAnimMontageInstance* MontageInstance =
-			PLAnimInstance->GetActiveInstanceForMontage(CurrentMontage))
-		{
-			MontageWeight = MontageInstance->GetWeight();
-		}
-	}
-
-	const ENetMode NetMode = GetWorld() ? GetWorld()->GetNetMode() : NM_MAX;
-
-	const TCHAR* NetModeText = TEXT("Unknown");
-	switch (NetMode)
-	{
-	case NM_Standalone: NetModeText = TEXT("Standalone"); break;
-	case NM_DedicatedServer: NetModeText = TEXT("DedicatedServer"); break;
-	case NM_ListenServer: NetModeText = TEXT("ListenServer"); break;
-	case NM_Client: NetModeText = TEXT("Client"); break;
-	default: break;
-	}
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("APPLY_ABILITY_ANIM_STATE World=%s Pawn=%s Anim=%s Authority=%d Local=%d RMActive=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
-		NetModeText,
-		*GetNameSafe(this),
-		*GetNameSafe(PLAnimInstance),
-		HasAuthority(),
-		IsLocallyControlled(),
-		NewState.bAbilityRootMotionActive,
-		NewState.bShouldBlendMontage,
-		*GetNameSafe(CurrentMontage),
-		MontagePosition,
-		MontageLength,
-		MontageWeight
 	);
 }
 
