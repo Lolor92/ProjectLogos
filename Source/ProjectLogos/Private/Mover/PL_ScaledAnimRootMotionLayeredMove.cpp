@@ -10,6 +10,7 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "Pawn/BasePawn.h"
 
 FPL_ScaledAnimRootMotionLayeredMove::FPL_ScaledAnimRootMotionLayeredMove()
 {
@@ -64,6 +65,16 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 	
 	if (bShouldReleaseRootMotion)
 	{
+		if (ABasePawn* BasePawn = Cast<ABasePawn>(MoverComp->GetOwner()))
+		{
+			// Only authority or owning client should publish this.
+			// Simulated proxies wait for replication.
+			if (BasePawn->HasAuthority() || BasePawn->IsLocallyControlled())
+			{
+				BasePawn->SetShouldBlendMontage(true);
+			}
+		}
+
 		DurationMs = 0.f;
 		return false;
 	}

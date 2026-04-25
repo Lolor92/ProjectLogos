@@ -24,6 +24,8 @@ class PROJECTLOGOS_API ABasePawn : public APawn, public IAbilitySystemInterface
 
 public:
 	ABasePawn();
+	
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 	virtual UAbilitySystemComponent* GetAbilitySystemComponent() const override;
 
@@ -53,10 +55,27 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Mover")
 	bool IsMoving() const;
+	
+	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
+	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
+
+	UFUNCTION(BlueprintPure, Category="Ability|Animation")
+	bool ShouldBlendMontage() const { return bShouldBlendMontage; }
 
 protected:
 	// Initializes this pawn as the avatar for an ASC.
 	void InitializeAbilitySystem(UPL_AbilitySystemComponent* InAbilitySystemComponent, AActor* OwnerActor);
+	
+	UPROPERTY(ReplicatedUsing=OnRep_ShouldBlendMontage, BlueprintReadOnly, Category="Ability|Animation")
+	bool bShouldBlendMontage = false;
+
+	UFUNCTION()
+	void OnRep_ShouldBlendMontage();
+
+	UFUNCTION(Server, Reliable)
+	void ServerSetShouldBlendMontage(bool bNewShouldBlendMontage);
+
+	void ApplyShouldBlendMontage();
 
 	// Main collision body. Mover moves this.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")

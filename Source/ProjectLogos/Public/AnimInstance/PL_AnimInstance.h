@@ -18,6 +18,9 @@ class PROJECTLOGOS_API UPL_AnimInstance : public UAnimInstance
 public:
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
+	
+	UFUNCTION(BlueprintCallable, Category="Anim|Ability")
+	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
 
 protected:
 	// Pawn that owns this animation instance.
@@ -35,4 +38,7 @@ protected:
 	// Movement direction relative to pawn facing. Useful for 2D blendspaces.
 	UPROPERTY(BlueprintReadOnly, Category="Animation")
 	float MovementDirectionYaw = 0.f;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|Ability")
+	bool bShouldBlendMontage = false;
 };

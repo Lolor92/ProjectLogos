@@ -8,6 +8,7 @@
 class UAnimMontage;
 class UCharacterMoverComponent;
 class USkeletalMeshComponent;
+class ABasePawn;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE(FPLPlayMoverMontageDelegate);
 
@@ -58,6 +59,8 @@ public:
 	virtual void Activate() override;
 	virtual void ExternalCancel() override;
 	virtual void OnDestroy(bool bInOwnerFinished) override;
+	
+	ABasePawn* GetAvatarBasePawn() const;
 
 protected:
 	UPROPERTY()

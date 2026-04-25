@@ -5,6 +5,9 @@
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "Mover/PL_MoverPawnComponent.h"
+#include "AnimInstance/PL_AnimInstance.h"
+#include "Net/UnrealNetwork.h"
+
 
 ABasePawn::ABasePawn()
 {
@@ -47,6 +50,13 @@ ABasePawn::ABasePawn()
 	CombatComponent = CreateDefaultSubobject<UPL_CombatComponent>(TEXT("CombatComponent"));
 }
 
+void ABasePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+
+	DOREPLIFETIME(ABasePawn, bShouldBlendMontage);
+}
+
 UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const
 {
 	return AbilitySystemComponent;
@@ -85,4 +95,66 @@ bool ABasePawn::IsMoving() const
 {
 	// True when horizontal velocity is meaningful.
 	return GetGroundSpeed() > KINDA_SMALL_NUMBER;
+}
+
+void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
+{
+	if (bShouldBlendMontage == bNewShouldBlendMontage)
+	{
+		return;
+	}
+
+	bShouldBlendMontage = bNewShouldBlendMontage;
+
+	// Immediate local update.
+	ApplyShouldBlendMontage();
+
+	if (HasAuthority())
+	{
+		ForceNetUpdate();
+		return;
+	}
+
+	// Only the owning client should ask the server to replicate this.
+	// Simulated proxies should wait for OnRep.
+	if (IsLocallyControlled())
+	{
+		ServerSetShouldBlendMontage(bNewShouldBlendMontage);
+	}
+}
+
+void ABasePawn::ServerSetShouldBlendMontage_Implementation(bool bNewShouldBlendMontage)
+{
+	if (bShouldBlendMontage == bNewShouldBlendMontage)
+	{
+		return;
+	}
+
+	bShouldBlendMontage = bNewShouldBlendMontage;
+
+	ApplyShouldBlendMontage();
+	ForceNetUpdate();
+}
+
+void ABasePawn::OnRep_ShouldBlendMontage()
+{
+	ApplyShouldBlendMontage();
+}
+
+void ABasePawn::ApplyShouldBlendMontage()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	UPL_AnimInstance* PLAnimInstance =
+		Cast<UPL_AnimInstance>(MeshComponent->GetAnimInstance());
+
+	if (!PLAnimInstance)
+	{
+		return;
+	}
+
+	PLAnimInstance->SetShouldBlendMontage(bShouldBlendMontage);
 }

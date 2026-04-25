@@ -45,3 +45,8 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	MovementDirectionYaw = UKismetMathLibrary::NormalizedDeltaRotator(
 		MovementRotation, ActorRotation).Yaw;
 }
+
+void UPL_AnimInstance::SetShouldBlendMontage(bool bNewShouldBlendMontage)
+{
+	bShouldBlendMontage = bNewShouldBlendMontage;
+}

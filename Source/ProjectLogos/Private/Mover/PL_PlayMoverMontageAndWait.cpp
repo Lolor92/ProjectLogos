@@ -8,6 +8,7 @@
 #include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Mover/PL_ScaledAnimRootMotionLayeredMove.h"
+#include "Pawn/BasePawn.h"
 
 
 UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWait(
@@ -98,6 +99,11 @@ void UPL_PlayMoverMontageAndWait::Activate()
 bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 {
 	if (!AnimInstance || !MontageToPlay) return false;
+	
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		BasePawn->SetShouldBlendMontage(false);
+	}
 	
 	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
 
@@ -194,7 +200,15 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 
 void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted)
 {
-	if (InMontage != MontageToPlay) return;
+	if (InMontage != MontageToPlay)
+	{
+		return;
+	}
+
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		BasePawn->SetShouldBlendMontage(false);
+	}
 
 	if (ShouldBroadcastAbilityTaskDelegates() && !bInterrupted)
 	{
@@ -206,12 +220,22 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 
 void UPL_PlayMoverMontageAndWait::ExternalCancel()
 {
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		BasePawn->SetShouldBlendMontage(false);
+	}
+
 	OnCancelled.Broadcast();
 	Super::ExternalCancel();
 }
 
 void UPL_PlayMoverMontageAndWait::OnDestroy(bool bInOwnerFinished)
 {
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		BasePawn->SetShouldBlendMontage(false);
+	}
+
 	if (bStopWhenAbilityEnds)
 	{
 		StopPlayingMontage();
@@ -241,4 +265,14 @@ UCharacterMoverComponent* UPL_PlayMoverMontageAndWait::FindCharacterMoverCompone
 	if (!AvatarActor) return nullptr;
 
 	return AvatarActor->FindComponentByClass<UCharacterMoverComponent>();
+}
+
+ABasePawn* UPL_PlayMoverMontageAndWait::GetAvatarBasePawn() const
+{
+	if (!Ability)
+	{
+		return nullptr;
+	}
+
+	return Cast<ABasePawn>(Ability->GetAvatarActorFromActorInfo());
 }
