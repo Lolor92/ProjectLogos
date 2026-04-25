@@ -9,6 +9,29 @@
  * Project base gameplay ability.
  * Stores shared ability data like combo chaining.
  */
+
+USTRUCT(BlueprintType)
+struct FPLRootMotionReleaseSettings
+{
+	GENERATED_BODY()
+
+	// If false, the montage keeps root motion for the whole montage unless collision stops it.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Root Motion Release")
+	bool bUseRootMotionRelease = false;
+
+	// Percent of the montage where root motion is allowed to release.
+	// Example: 45 means the player can break into movement after 45% of the montage has played.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Root Motion Release",
+		meta=(EditCondition="bUseRootMotionRelease", ClampMin="0.0", ClampMax="100.0", Units="Percent"))
+	float RootMotionReleasePercent = 100.f;
+
+	// If true, reaching the release point does not stop root motion by itself.
+	// Root motion only stops when the player is actually trying to move.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Root Motion Release",
+		meta=(EditCondition="bUseRootMotionRelease"))
+	bool bRequireMovementInputForRelease = true;
+};
+
 UCLASS(Abstract)
 class PROJECTLOGOS_API UPL_GameplayAbility : public UGameplayAbility
 {
@@ -28,6 +51,12 @@ public:
 	// True while this ability allows combo continuation.
 	UFUNCTION(BlueprintPure, Category="Ability|Combo")
 	bool IsComboWindowOpen() const { return bComboWindowOpen; }
+	
+	UFUNCTION(BlueprintPure, Category="Ability|Root Motion")
+	const FPLRootMotionReleaseSettings& GetRootMotionReleaseSettings() const
+	{
+		return RootMotionReleaseSettings;
+	}
 
 protected:
 	// Ability class to activate when combo input is pressed again.
@@ -45,6 +74,9 @@ protected:
 	// Closes the combo window manually.
 	UFUNCTION(BlueprintCallable, Category="Ability|Combo")
 	void CloseComboWindow();
+	
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Root Motion")
+	FPLRootMotionReleaseSettings RootMotionReleaseSettings;
 
 private:
 	void ResetComboWindow();

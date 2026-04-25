@@ -56,26 +56,26 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 		}
 	}
 
-	const double SecondsSinceMontageStarted =
-		(TimeStep.BaseSimTimeMs - StartSimTimeMs) / 1000.0;
+	const double SecondsSinceMontageStarted = (TimeStep.BaseSimTimeMs - StartSimTimeMs) / 1000.0;
+	const double ScaledSecondsSinceMontageStarted = SecondsSinceMontageStarted * MontageState.PlayRate;
+	const float ExtractionStartPosition = MontageState.StartingMontagePosition + ScaledSecondsSinceMontageStarted;
+	const bool bPastReleasePoint = bUseRootMotionRelease && ExtractionStartPosition >= RootMotionReleasePosition;
+	const bool bShouldReleaseRootMotion = bPastReleasePoint && (!bRequireMoveInputForRootMotionRelease || HasMovementInput(StartState));
+	
+	if (bShouldReleaseRootMotion)
+	{
+		DurationMs = 0.f;
+		return false;
+	}
 
-	const double ScaledSecondsSinceMontageStarted =
-		SecondsSinceMontageStarted * MontageState.PlayRate;
-
-	const float ExtractionStartPosition =
-		MontageState.StartingMontagePosition + ScaledSecondsSinceMontageStarted;
-
-	const float ExtractionEndPosition =
-		ExtractionStartPosition + (DeltaSeconds * MontageState.PlayRate);
-
+	const float ExtractionEndPosition = ExtractionStartPosition + (DeltaSeconds * MontageState.PlayRate);
+	
 	// Pull root motion from the montage for this simulation step.
-	FTransform LocalRootMotion = MontageState.Montage
-		? UMotionWarpingUtilities::ExtractRootMotionFromAnimation(
-			MontageState.Montage,
-			ExtractionStartPosition,
-			ExtractionEndPosition
-		)
-		: FTransform::Identity;
+	FTransform LocalRootMotion = MontageState.Montage ? UMotionWarpingUtilities::ExtractRootMotionFromAnimation(
+		MontageState.Montage,
+		ExtractionStartPosition,
+		ExtractionEndPosition
+	) : FTransform::Identity;
 
 	float EffectiveTranslationScale = RootMotionTranslationScale;
 
@@ -154,6 +154,10 @@ void FPL_ScaledAnimRootMotionLayeredMove::NetSerialize(FArchive& Ar)
 	uint8 CollisionStopModeAsByte = static_cast<uint8>(RootMotionCollisionStopMode);
 	Ar << CollisionStopModeAsByte;
 	RootMotionCollisionStopMode = static_cast<EPLRootMotionCollisionStopMode>(CollisionStopModeAsByte);
+
+	Ar << bUseRootMotionRelease;
+	Ar << RootMotionReleasePosition;
+	Ar << bRequireMoveInputForRootMotionRelease;
 }
 
 UScriptStruct* FPL_ScaledAnimRootMotionLayeredMove::GetScriptStruct() const
@@ -164,6 +168,19 @@ UScriptStruct* FPL_ScaledAnimRootMotionLayeredMove::GetScriptStruct() const
 FString FPL_ScaledAnimRootMotionLayeredMove::ToSimpleString() const
 {
 	return TEXT("PL_ScaledAnimRootMotion");
+}
+
+bool FPL_ScaledAnimRootMotionLayeredMove::HasMovementInput(const FMoverTickStartData& StartState) const
+{
+	const FCharacterDefaultInputs* CharacterInputs =
+		StartState.InputCmd.InputCollection.FindDataByType<FCharacterDefaultInputs>();
+
+	if (!CharacterInputs)
+	{
+		return false;
+	}
+
+	return !CharacterInputs->GetMoveInput().IsNearlyZero();
 }
 
 bool FPL_ScaledAnimRootMotionLayeredMove::HasBlockingPawnCollision(

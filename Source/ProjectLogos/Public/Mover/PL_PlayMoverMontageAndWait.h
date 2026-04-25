@@ -85,6 +85,10 @@ protected:
 	// If true, AnimInstance plays the pose but Mover handles movement.
 	bool bDisableAnimRootMotion = true;
 	
+	bool bUseRootMotionRelease = false;
+	float RootMotionReleasePercent = 100.f;
+	bool bRequireMoveInputForRootMotionRelease = true;
+	
 	void OnMontageBlendingOut(UAnimMontage* InMontage, bool bInterrupted);
 	void OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted);
 	

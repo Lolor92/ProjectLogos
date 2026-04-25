@@ -33,6 +33,15 @@ struct PROJECTLOGOS_API FPL_ScaledAnimRootMotionLayeredMove : public FLayeredMov
 	// Optional pawn collision check for stopping root motion translation.
 	UPROPERTY(BlueprintReadWrite, Category="Mover")
 	EPLRootMotionCollisionStopMode RootMotionCollisionStopMode = EPLRootMotionCollisionStopMode::None;
+	
+	UPROPERTY(BlueprintReadWrite, Category="Mover")
+	bool bUseRootMotionRelease = false;
+
+	UPROPERTY(BlueprintReadWrite, Category="Mover")
+	float RootMotionReleasePosition = 0.f;
+
+	UPROPERTY(BlueprintReadWrite, Category="Mover")
+	bool bRequireMoveInputForRootMotionRelease = true;
 
 	virtual bool GenerateMove(
 		const FMoverTickStartData& StartState,
@@ -48,6 +57,8 @@ struct PROJECTLOGOS_API FPL_ScaledAnimRootMotionLayeredMove : public FLayeredMov
 	virtual FString ToSimpleString() const override;
 
 private:
+	bool HasMovementInput(const FMoverTickStartData& StartState) const;
+	
 	bool HasBlockingPawnCollision(
 		const UMoverComponent* MoverComp,
 		const FVector& WorldTranslation

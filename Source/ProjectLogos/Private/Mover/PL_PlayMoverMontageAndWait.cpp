@@ -128,9 +128,9 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 void UPL_PlayMoverMontageAndWait::QueueScaledRootMotionMove(float StartingMontagePosition)
 {
 	if (!CharacterMoverComponent || !MontageToPlay) return;
-
+	
 	TSharedPtr<FPL_ScaledAnimRootMotionLayeredMove> RootMotionMove =
-		MakeShared<FPL_ScaledAnimRootMotionLayeredMove>();
+			MakeShared<FPL_ScaledAnimRootMotionLayeredMove>();
 
 	RootMotionMove->MontageState.Montage = MontageToPlay;
 	RootMotionMove->MontageState.PlayRate = PlayRate;
@@ -140,8 +140,24 @@ void UPL_PlayMoverMontageAndWait::QueueScaledRootMotionMove(float StartingMontag
 	RootMotionMove->RootMotionTranslationScale = RootMotionTranslationScale;
 	RootMotionMove->RootMotionCollisionStopMode = CollisionStopMode;
 
-	// Match the montage duration, adjusted by play rate.
-	const float DurationSeconds = MontageToPlay->GetPlayLength() / FMath::Max(PlayRate, UE_KINDA_SMALL_NUMBER);
+	// Root-motion release settings.
+	// Release point does NOT stop root motion by itself.
+	// It only allows the layered move to stop once movement input exists.
+	const float SafePlayRate = FMath::Max(FMath::Abs(PlayRate), UE_KINDA_SMALL_NUMBER);
+	const float MontageLength = MontageToPlay->GetPlayLength();
+
+	const float ClampedReleasePercent = FMath::Clamp(RootMotionReleasePercent, 0.f, 100.f);
+	const float ReleaseAlpha = ClampedReleasePercent / 100.f;
+	const float RootMotionReleasePosition = MontageLength * ReleaseAlpha;
+
+	RootMotionMove->bUseRootMotionRelease = bUseRootMotionRelease;
+	RootMotionMove->RootMotionReleasePosition = RootMotionReleasePosition;
+	RootMotionMove->bRequireMoveInputForRootMotionRelease = bRequireMoveInputForRootMotionRelease;
+
+	// Important:
+	// Keep the layered move alive for the FULL montage duration.
+	// If we end it at the release point, root motion would stop even when the player is not moving.
+	const float DurationSeconds = MontageLength / SafePlayRate;
 	RootMotionMove->DurationMs = DurationSeconds * 1000.f;
 
 	// Root motion should override normal movement while active.
