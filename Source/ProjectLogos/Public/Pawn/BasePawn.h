@@ -131,6 +131,7 @@ public:
 	void StartAbilityMontageVisual(UAnimMontage* Montage, float PlayRate, float StartPosition);
 	void StopAbilityMontageVisual(UAnimMontage* Montage);
 	void EnsureAbilityMontageVisual();
+	bool IsAbilityMontageVisualExpired() const;
 
 protected:
 	// Initializes this pawn as the avatar for an ASC.

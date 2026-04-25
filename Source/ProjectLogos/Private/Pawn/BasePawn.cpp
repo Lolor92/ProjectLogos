@@ -57,7 +57,7 @@ void ABasePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(ABasePawn, AbilityAnimState);
+	DOREPLIFETIME_CONDITION(ABasePawn, AbilityAnimState, COND_SkipOwner);
 	DOREPLIFETIME_CONDITION(ABasePawn, AbilityMontageVisualState, COND_SkipOwner);
 }
 
@@ -198,6 +198,23 @@ float ABasePawn::GetServerTimeSecondsSafe() const
 	return World->GetTimeSeconds();
 }
 
+bool ABasePawn::IsAbilityMontageVisualExpired() const
+{
+	const UAnimMontage* Montage = AbilityMontageVisualState.Montage;
+	if (!Montage)
+	{
+		return true;
+	}
+
+	const float ServerNow = GetServerTimeSecondsSafe();
+
+	const float ExpectedPosition =
+		AbilityMontageVisualState.StartPosition +
+		((ServerNow - AbilityMontageVisualState.ServerStartTime) * AbilityMontageVisualState.PlayRate);
+
+	return ExpectedPosition >= Montage->GetPlayLength() + 0.25f;
+}
+
 void ABasePawn::StartAbilityMontageVisual(
 	UAnimMontage* Montage,
 	float PlayRate,
@@ -296,12 +313,17 @@ void ABasePawn::ApplyAbilityMontageVisualState()
 
 void ABasePawn::EnsureAbilityMontageVisual()
 {
-	if (IsLocallyControlled())
+	if (HasAuthority() || IsLocallyControlled())
 	{
 		return;
 	}
 
 	if (!AbilityMontageVisualState.bIsPlaying || !AbilityMontageVisualState.Montage)
+	{
+		return;
+	}
+
+	if (IsAbilityMontageVisualExpired())
 	{
 		return;
 	}
