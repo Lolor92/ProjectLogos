@@ -44,6 +44,40 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	// Difference between where we move and where the pawn faces.
 	MovementDirectionYaw = UKismetMathLibrary::NormalizedDeltaRotator(
 		MovementRotation, ActorRotation).Yaw;
+
+	if (bShouldBlendMontage)
+	{
+		UAnimMontage* CurrentMontage = GetCurrentActiveMontage();
+
+		float MontagePosition = -1.f;
+		float MontageLength = -1.f;
+		float MontageWeight = -1.f;
+
+		if (CurrentMontage)
+		{
+			MontagePosition = Montage_GetPosition(CurrentMontage);
+			MontageLength = CurrentMontage->GetPlayLength();
+
+			if (FAnimMontageInstance* MontageInstance =
+				GetActiveInstanceForMontage(CurrentMontage))
+			{
+				MontageWeight = MontageInstance->GetWeight();
+			}
+		}
+
+		const APawn* PawnOwner = TryGetPawnOwner();
+
+		UE_LOG(LogTemp, Warning,
+			TEXT("ANIM_BLEND_TICK Pawn=%s Local=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
+			*GetNameSafe(PawnOwner),
+			PawnOwner ? PawnOwner->IsLocallyControlled() : false,
+			bShouldBlendMontage,
+			*GetNameSafe(CurrentMontage),
+			MontagePosition,
+			MontageLength,
+			MontageWeight
+		);
+	}
 }
 
 void UPL_AnimInstance::SetShouldBlendMontage(bool bNewShouldBlendMontage)

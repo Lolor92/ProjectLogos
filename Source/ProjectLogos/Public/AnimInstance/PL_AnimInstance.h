@@ -22,6 +22,8 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Anim|Ability")
 	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
 
+	bool GetShouldBlendMontage_Debug() const { return bShouldBlendMontage; }
+
 protected:
 	// Pawn that owns this animation instance.
 	UPROPERTY(BlueprintReadOnly, Category="Animation")

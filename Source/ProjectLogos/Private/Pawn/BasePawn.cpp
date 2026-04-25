@@ -183,15 +183,35 @@ void ABasePawn::ApplyShouldBlendMontage()
 	}
 
 	PLAnimInstance->SetShouldBlendMontage(bShouldBlendMontage);
-	
-	const UAnimMontage* CurrentMontage = PLAnimInstance->GetCurrentActiveMontage();
-	
+
+	UAnimMontage* CurrentMontage = PLAnimInstance->GetCurrentActiveMontage();
+
+	float MontagePosition = -1.f;
+	float MontageLength = -1.f;
+	float MontageWeight = -1.f;
+
+	if (CurrentMontage)
+	{
+		MontagePosition = PLAnimInstance->Montage_GetPosition(CurrentMontage);
+		MontageLength = CurrentMontage->GetPlayLength();
+
+		if (FAnimMontageInstance* MontageInstance =
+			PLAnimInstance->GetActiveInstanceForMontage(CurrentMontage))
+		{
+			MontageWeight = MontageInstance->GetWeight();
+		}
+	}
+
 	UE_LOG(LogTemp, Warning,
-		TEXT("APPLY_BLEND Pawn=%s Authority=%d Local=%d Blend=%d CurrentMontage=%s"),
+		TEXT("APPLY_BLEND Pawn=%s Authority=%d Local=%d Blend=%d CurrentMontage=%s Pos=%.3f Len=%.3f Weight=%.3f AnimVar=%d"),
 		*GetNameSafe(this),
 		HasAuthority(),
 		IsLocallyControlled(),
 		bShouldBlendMontage,
-		*GetNameSafe(CurrentMontage)
+		*GetNameSafe(CurrentMontage),
+		MontagePosition,
+		MontageLength,
+		MontageWeight,
+		PLAnimInstance->GetShouldBlendMontage_Debug()
 	);
 }
