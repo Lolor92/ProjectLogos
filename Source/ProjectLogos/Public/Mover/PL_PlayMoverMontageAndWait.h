@@ -61,6 +61,7 @@ public:
 	virtual void OnDestroy(bool bInOwnerFinished) override;
 	
 	ABasePawn* GetAvatarBasePawn() const;
+	void SetAvatarShouldBlendMontage(bool bNewValue, const TCHAR* Source) const;
 
 protected:
 	UPROPERTY()

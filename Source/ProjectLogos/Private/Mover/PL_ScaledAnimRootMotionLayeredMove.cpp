@@ -67,6 +67,17 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 	{
 		if (ABasePawn* BasePawn = Cast<ABasePawn>(MoverComp->GetOwner()))
 		{
+			UE_LOG(LogTemp, Warning,
+		TEXT("RM_RELEASE Fired Pawn=%s Authority=%d Local=%d StartPos=%.3f ReleasePos=%.3f HasInput=%d"),
+		*GetNameSafe(BasePawn),
+		BasePawn ? BasePawn->HasAuthority() : false,
+		BasePawn ? BasePawn->IsLocallyControlled() : false,
+		ExtractionStartPosition,
+		RootMotionReleasePosition,
+		HasMovementInput(StartState)
+	);
+
+			
 			// Only authority or owning client should publish this.
 			// Simulated proxies wait for replication.
 			if (BasePawn->HasAuthority() || BasePawn->IsLocallyControlled())

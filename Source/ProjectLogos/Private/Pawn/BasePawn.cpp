@@ -99,6 +99,15 @@ bool ABasePawn::IsMoving() const
 
 void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
 {
+	UE_LOG(LogTemp, Warning,
+		TEXT("SET_BLEND Request Pawn=%s Authority=%d Local=%d Old=%d New=%d"),
+		*GetNameSafe(this),
+		HasAuthority(),
+		IsLocallyControlled(),
+		bShouldBlendMontage,
+		bNewShouldBlendMontage
+	);
+	
 	if (bShouldBlendMontage == bNewShouldBlendMontage)
 	{
 		return;
@@ -125,6 +134,15 @@ void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
 
 void ABasePawn::ServerSetShouldBlendMontage_Implementation(bool bNewShouldBlendMontage)
 {
+	UE_LOG(LogTemp, Warning,
+		TEXT("SERVER_BLEND Pawn=%s Authority=%d Local=%d Old=%d New=%d"),
+		*GetNameSafe(this),
+		HasAuthority(),
+		IsLocallyControlled(),
+		bShouldBlendMontage,
+		bNewShouldBlendMontage
+	);
+	
 	if (bShouldBlendMontage == bNewShouldBlendMontage)
 	{
 		return;
@@ -138,6 +156,14 @@ void ABasePawn::ServerSetShouldBlendMontage_Implementation(bool bNewShouldBlendM
 
 void ABasePawn::OnRep_ShouldBlendMontage()
 {
+	UE_LOG(LogTemp, Warning,
+		TEXT("ONREP_BLEND Pawn=%s Authority=%d Local=%d Blend=%d"),
+		*GetNameSafe(this),
+		HasAuthority(),
+		IsLocallyControlled(),
+		bShouldBlendMontage
+	);
+	
 	ApplyShouldBlendMontage();
 }
 
@@ -157,4 +183,15 @@ void ABasePawn::ApplyShouldBlendMontage()
 	}
 
 	PLAnimInstance->SetShouldBlendMontage(bShouldBlendMontage);
+	
+	const UAnimMontage* CurrentMontage = PLAnimInstance->GetCurrentActiveMontage();
+	
+	UE_LOG(LogTemp, Warning,
+		TEXT("APPLY_BLEND Pawn=%s Authority=%d Local=%d Blend=%d CurrentMontage=%s"),
+		*GetNameSafe(this),
+		HasAuthority(),
+		IsLocallyControlled(),
+		bShouldBlendMontage,
+		*GetNameSafe(CurrentMontage)
+	);
 }

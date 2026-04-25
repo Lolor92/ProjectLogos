@@ -100,10 +100,7 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 {
 	if (!AnimInstance || !MontageToPlay) return false;
 	
-	if (ABasePawn* BasePawn = GetAvatarBasePawn())
-	{
-		BasePawn->SetShouldBlendMontage(false);
-	}
+	SetAvatarShouldBlendMontage(false, TEXT("PlayScaledMoverMontage_Start"));
 	
 	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
 
@@ -187,6 +184,18 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 {
 	if (InMontage != MontageToPlay) return;
 
+	ABasePawn* BasePawn = GetAvatarBasePawn();
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("TASK_MONTAGE_BLENDOUT Pawn=%s Authority=%d Local=%d Montage=%s Interrupted=%d CurrentMontage=%s"),
+		*GetNameSafe(BasePawn),
+		BasePawn ? BasePawn->HasAuthority() : false,
+		BasePawn ? BasePawn->IsLocallyControlled() : false,
+		*GetNameSafe(InMontage),
+		bInterrupted,
+		AnimInstance ? *GetNameSafe(AnimInstance->GetCurrentActiveMontage()) : TEXT("NoAnimInstance")
+	);
+
 	if (!ShouldBroadcastAbilityTaskDelegates()) return;
 
 	if (bInterrupted)
@@ -200,15 +209,24 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 
 void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool bInterrupted)
 {
+	ABasePawn* BasePawn = GetAvatarBasePawn();
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("TASK_MONTAGE_ENDED Pawn=%s Authority=%d Local=%d Montage=%s Interrupted=%d CurrentMontage=%s"),
+		*GetNameSafe(BasePawn),
+		BasePawn ? BasePawn->HasAuthority() : false,
+		BasePawn ? BasePawn->IsLocallyControlled() : false,
+		*GetNameSafe(InMontage),
+		bInterrupted,
+		AnimInstance ? *GetNameSafe(AnimInstance->GetCurrentActiveMontage()) : TEXT("NoAnimInstance")
+	);
+
 	if (InMontage != MontageToPlay)
 	{
 		return;
 	}
 
-	if (ABasePawn* BasePawn = GetAvatarBasePawn())
-	{
-		BasePawn->SetShouldBlendMontage(false);
-	}
+	SetAvatarShouldBlendMontage(false, TEXT("OnMontageEnded"));
 
 	if (ShouldBroadcastAbilityTaskDelegates() && !bInterrupted)
 	{
@@ -220,10 +238,7 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 
 void UPL_PlayMoverMontageAndWait::ExternalCancel()
 {
-	if (ABasePawn* BasePawn = GetAvatarBasePawn())
-	{
-		BasePawn->SetShouldBlendMontage(false);
-	}
+	SetAvatarShouldBlendMontage(false, TEXT("ExternalCancel"));
 
 	OnCancelled.Broadcast();
 	Super::ExternalCancel();
@@ -231,14 +246,29 @@ void UPL_PlayMoverMontageAndWait::ExternalCancel()
 
 void UPL_PlayMoverMontageAndWait::OnDestroy(bool bInOwnerFinished)
 {
-	if (ABasePawn* BasePawn = GetAvatarBasePawn())
-	{
-		BasePawn->SetShouldBlendMontage(false);
-	}
+	const bool bMontageStillPlaying =
+		AnimInstance &&
+		MontageToPlay &&
+		AnimInstance->Montage_IsPlaying(MontageToPlay);
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("TASK_DESTROY Pawn=%s Authority=%d Local=%d OwnerFinished=%d StopWhenAbilityEnds=%d MontageStillPlaying=%d"),
+		*GetNameSafe(GetAvatarBasePawn()),
+		GetAvatarBasePawn() ? GetAvatarBasePawn()->HasAuthority() : false,
+		GetAvatarBasePawn() ? GetAvatarBasePawn()->IsLocallyControlled() : false,
+		bInOwnerFinished,
+		bStopWhenAbilityEnds,
+		bMontageStillPlaying
+	);
 
 	if (bStopWhenAbilityEnds)
 	{
 		StopPlayingMontage();
+	}
+
+	if (!bMontageStillPlaying)
+	{
+		SetAvatarShouldBlendMontage(false, TEXT("OnDestroy_NotPlaying"));
 	}
 
 	Super::OnDestroy(bInOwnerFinished);
@@ -275,4 +305,27 @@ ABasePawn* UPL_PlayMoverMontageAndWait::GetAvatarBasePawn() const
 	}
 
 	return Cast<ABasePawn>(Ability->GetAvatarActorFromActorInfo());
+}
+
+void UPL_PlayMoverMontageAndWait::SetAvatarShouldBlendMontage(
+	bool bNewValue,
+	const TCHAR* Source
+) const
+{
+	ABasePawn* BasePawn = GetAvatarBasePawn();
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("TASK_SET_BLEND Source=%s Pawn=%s Authority=%d Local=%d New=%d Montage=%s"),
+		Source,
+		*GetNameSafe(BasePawn),
+		BasePawn ? BasePawn->HasAuthority() : false,
+		BasePawn ? BasePawn->IsLocallyControlled() : false,
+		bNewValue,
+		*GetNameSafe(MontageToPlay)
+	);
+
+	if (BasePawn)
+	{
+		BasePawn->SetShouldBlendMontage(bNewValue);
+	}
 }
