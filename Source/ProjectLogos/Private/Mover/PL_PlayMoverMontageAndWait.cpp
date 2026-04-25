@@ -1,6 +1,7 @@
 ﻿#include "Mover/PL_PlayMoverMontageAndWait.h"
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystemComponent.h"
+#include "GAS/Abilities/PL_GameplayAbility.h"
 #include "Animation/AnimInstance.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Actor.h"
@@ -29,6 +30,16 @@ UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWai
 	Task->StartSection = StartSection;
 	Task->RootMotionTranslationScale = RootMotionTranslationScale;
 	Task->CollisionStopMode = CollisionStopMode;
+	if (const UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(OwningAbility))
+	{
+		const FPLRootMotionReleaseSettings& ReleaseSettings =
+			PLAbility->GetRootMotionReleaseSettings();
+
+		Task->bUseRootMotionRelease = ReleaseSettings.bUseRootMotionRelease;
+		Task->RootMotionReleasePercent = ReleaseSettings.RootMotionReleasePercent;
+		Task->bRequireMoveInputForRootMotionRelease =
+			ReleaseSettings.bRequireMovementInputForRelease;
+	}
 	Task->bStopWhenAbilityEnds = bStopWhenAbilityEnds;
 	Task->bDisableAnimRootMotion = bDisableAnimRootMotion;
 
