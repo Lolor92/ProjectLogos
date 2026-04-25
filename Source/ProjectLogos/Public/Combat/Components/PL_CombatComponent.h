@@ -1,12 +1,52 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/Data/PL_AttackOverlapTypes.h"
+#include "Combat/Data/PL_TagReactionData.h"
 #include "Components/ActorComponent.h"
 #include "GAS/Data/PL_AbilitySet.h"
+#include "GameplayTagContainer.h"
 #include "PL_CombatComponent.generated.h"
 
 class ABasePawn;
+class UAbilitySystemComponent;
+class UAnimNotifyState;
 class UPL_AbilitySystemComponent;
+class USkeletalMeshComponent;
+class FBoolProperty;
+class FPLCombatTagReactionRuntime;
+
+struct FPLActiveAttackOverlapWindow
+{
+	const UAnimNotifyState* NotifyState = nullptr;
+
+	TWeakObjectPtr<USkeletalMeshComponent> MeshComp;
+
+	FName TraceSocketName = NAME_None;
+
+	FPLAttackOverlapWindowSettings Settings;
+
+	bool bHasPreviousTransform = false;
+
+	FTransform PreviousShapeTransform = FTransform::Identity;
+
+	TSet<TWeakObjectPtr<AActor>> HitActors;
+};
+
+// Drives an AnimInstance bool from one or more gameplay tags.
+USTRUCT(BlueprintType)
+struct FPL_AnimBoolBinding
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim Bool")
+	FGameplayTagContainer Tags;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim Bool")
+	FName AnimBoolName;
+
+	FBoolProperty* CachedBoolProperty = nullptr;
+};
 
 /**
  * Combat component owns combat startup setup.
@@ -19,8 +59,13 @@ class PROJECTLOGOS_API UPL_CombatComponent : public UActorComponent
 
 public:
 	UPL_CombatComponent();
+	virtual ~UPL_CombatComponent() override;
 
 	void InitializeCombat(ABasePawn* InOwnerPawn, UPL_AbilitySystemComponent* InAbilitySystemComponent);
+
+	void NotifyCombatTagReaction(const FGameplayTag& TriggerTag, bool bAdded);
+	
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 
 	UFUNCTION(BlueprintPure, Category="Combat")
 	UPL_AbilitySystemComponent* GetProjectAbilitySystemComponent() const { return AbilitySystemComponent; }
@@ -28,16 +73,69 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat")
 	ABasePawn* GetOwnerPawn() const { return OwnerPawn; }
 
+	bool BeginAttackOverlapWindow(
+		const UAnimNotifyState* NotifyState,
+		USkeletalMeshComponent* MeshComp,
+		FName TraceSocketName,
+		const FPLAttackOverlapWindowSettings& Settings
+	);
+
+	void EndAttackOverlapWindow(
+		const UAnimNotifyState* NotifyState,
+		USkeletalMeshComponent* MeshComp
+	);
+
 protected:
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void TickComponent(
+		float DeltaTime,
+		ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction
+	) override;
+
+	UFUNCTION(BlueprintImplementableEvent, Category="Combat|Attack Overlap")
+	void BP_OnAttackOverlapDetected(
+		AActor* HitActor,
+		const FHitResult& HitResult,
+		USkeletalMeshComponent* SourceMesh
+	);
 
 	// Combat abilities granted when combat is initialized on the server.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Abilities")
 	TArray<TObjectPtr<UPL_AbilitySet>> DefaultAbilitySets;
 
+	// Gameplay tag driven reactions.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions")
+	TObjectPtr<UPL_TagReactionData> TagReactionData = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
+	TArray<FPL_AnimBoolBinding> AnimBoolBindings;
+
+	UFUNCTION(BlueprintImplementableEvent, Category="Combat|Tag Reactions")
+	void BP_OnCombatTagReaction(FGameplayTag TriggerTag, bool bAdded);
+
 private:
+	void ProcessAttackOverlapWindow(FPLActiveAttackOverlapWindow& Window);
+	void HandleAttackOverlapHit(FPLActiveAttackOverlapWindow& Window, const FHitResult& Hit);
+	void ApplyAttackOverlapGameplayEffects(
+		const FPLActiveAttackOverlapWindow& Window,
+		AActor* HitActor,
+		const FHitResult& Hit
+	);
+	UAbilitySystemComponent* GetTargetAbilitySystemComponent(AActor* TargetActor) const;
+	void DrawAttackOverlapDebug(const FPLActiveAttackOverlapWindow& Window, const FTransform& ShapeTransform, bool bHit) const;
+
+	static FCollisionShape MakeAttackOverlapCollisionShape(const FPLAttackOverlapShapeSettings& ShapeSettings);
+	static FTransform MakeAttackOverlapShapeTransform(
+		const FTransform& SocketTransform,
+		const FPLAttackOverlapShapeSettings& ShapeSettings
+	);
+
 	void GrantDefaultAbilities();
 	void ClearDefaultAbilities();
+
+	FPLCombatTagReactionRuntime* TagReactionRuntime = nullptr;
+
+	TArray<FPLActiveAttackOverlapWindow> ActiveAttackOverlapWindows;
 
 	UPROPERTY(Transient)
 	TObjectPtr<ABasePawn> OwnerPawn = nullptr;
