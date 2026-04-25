@@ -164,6 +164,8 @@ void FPL_ScaledAnimRootMotionLayeredMove::NetSerialize(FArchive& Ar)
 	Ar << CollisionStopModeAsByte;
 	RootMotionCollisionStopMode = static_cast<EPLRootMotionCollisionStopMode>(CollisionStopModeAsByte);
 
+	Ar << RootMotionCollisionForwardAngleDegrees;
+
 	Ar << bUseRootMotionRelease;
 	Ar << RootMotionReleasePosition;
 	Ar << bRequireMoveInputForRootMotionRelease;
@@ -239,22 +241,69 @@ bool FPL_ScaledAnimRootMotionLayeredMove::HasBlockingPawnCollision(
 		const UPrimitiveComponent* HitComponent = Hit.GetComponent();
 		const bool bIsCapsule = HitComponent && HitComponent->IsA<UCapsuleComponent>();
 		const bool bIsMesh = HitComponent && HitComponent->IsA<USkeletalMeshComponent>();
+		bool bMatchesStopMode = false;
 
 		switch (RootMotionCollisionStopMode)
 		{
 		case EPLRootMotionCollisionStopMode::Capsule:
-			return bIsCapsule;
+			bMatchesStopMode = bIsCapsule;
+			break;
 
 		case EPLRootMotionCollisionStopMode::Mesh:
-			return bIsMesh;
+			bMatchesStopMode = bIsMesh;
+			break;
 
 		case EPLRootMotionCollisionStopMode::CapsuleOrMesh:
-			return bIsCapsule || bIsMesh;
+			bMatchesStopMode = bIsCapsule || bIsMesh;
+			break;
 
 		case EPLRootMotionCollisionStopMode::None:
 		default:
-			return false;
+			bMatchesStopMode = false;
+			break;
 		}
+
+		if (!bMatchesStopMode)
+		{
+			continue;
+		}
+
+		// Only stop if the blocking pawn is in front of this pawn.
+		FVector Forward = UpdatedPrimitive->GetForwardVector();
+		Forward.Z = 0.f;
+
+		if (!Forward.Normalize())
+		{
+			continue;
+		}
+
+		// For normal sweep hits, ImpactPoint is good.
+		// For initial overlaps / penetration, use the hit actor location instead.
+		FVector HitPoint = Hit.ImpactPoint;
+
+		if (Hit.bStartPenetrating || HitPoint.IsNearlyZero())
+		{
+			HitPoint = HitActor->GetActorLocation();
+		}
+
+		FVector ToHit = HitPoint - Start;
+		ToHit.Z = 0.f;
+
+		if (!ToHit.Normalize())
+		{
+			continue;
+		}
+
+		const float ClampedAngleDegrees = FMath::Clamp(RootMotionCollisionForwardAngleDegrees, 0.f, 180.f);
+		const float MinForwardDot = FMath::Cos(FMath::DegreesToRadians(ClampedAngleDegrees));
+		const float ForwardDot = FVector::DotProduct(Forward, ToHit);
+
+		if (ForwardDot < MinForwardDot)
+		{
+			continue;
+		}
+
+		return true;
 	}
 
 	return false;

@@ -33,6 +33,11 @@ struct PROJECTLOGOS_API FPL_ScaledAnimRootMotionLayeredMove : public FLayeredMov
 	// Optional pawn collision check for stopping root motion translation.
 	UPROPERTY(BlueprintReadWrite, Category="Mover")
 	EPLRootMotionCollisionStopMode RootMotionCollisionStopMode = EPLRootMotionCollisionStopMode::None;
+
+	// Only stop root motion if the blocking pawn is inside this forward cone.
+	// 40 means +/-40 degrees from character forward.
+	UPROPERTY(BlueprintReadWrite, Category="Mover")
+	float RootMotionCollisionForwardAngleDegrees = 40.f;
 	
 	UPROPERTY(BlueprintReadWrite, Category="Mover")
 	bool bUseRootMotionRelease = false;
