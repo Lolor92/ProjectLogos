@@ -43,6 +43,30 @@ struct FPLRepAbilityAnimState
 	}
 };
 
+USTRUCT(BlueprintType)
+struct FPLRepAbilityMontageVisualState
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<UAnimMontage> Montage = nullptr;
+
+	UPROPERTY()
+	float PlayRate = 1.f;
+
+	UPROPERTY()
+	float StartPosition = 0.f;
+
+	UPROPERTY()
+	float ServerStartTime = 0.f;
+
+	UPROPERTY()
+	uint8 bIsPlaying : 1 = false;
+
+	UPROPERTY()
+	uint8 SequenceId = 0;
+};
+
 /**
  * Shared base pawn body.
  * Player and NPC pawns inherit from this.
@@ -107,20 +131,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Ability|Animation")
 	bool ShouldBlendMontage() const { return AbilityAnimState.bShouldBlendMontage; }
 
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastPlayAbilityMontageVisual(
-		UAnimMontage* Montage,
-		float InPlayRate,
-		FName InStartSection,
-		float InStartPosition,
-		bool bDisableRootMotion
-	);
-
-	UFUNCTION(NetMulticast, Reliable)
-	void MulticastStopAbilityMontageVisual(
-		UAnimMontage* Montage,
-		float BlendOutTime
-	);
+	void StartAbilityMontageVisual(UAnimMontage* Montage, float PlayRate, float StartPosition);
+	void StopAbilityMontageVisual(UAnimMontage* Montage);
+	void EnsureAbilityMontageVisual();
 
 protected:
 	// Initializes this pawn as the avatar for an ASC.
@@ -136,6 +149,16 @@ protected:
 	void ServerSetAbilityAnimState(const FPLRepAbilityAnimState& NewState);
 
 	void ApplyAbilityAnimState(const FPLRepAbilityAnimState& NewState);
+
+	UPROPERTY(ReplicatedUsing=OnRep_AbilityMontageVisualState)
+	FPLRepAbilityMontageVisualState AbilityMontageVisualState;
+
+	UFUNCTION()
+	void OnRep_AbilityMontageVisualState();
+
+	void ApplyAbilityMontageVisualState();
+
+	float GetServerTimeSecondsSafe() const;
 
 	// Main collision body. Mover moves this.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")

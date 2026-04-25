@@ -132,12 +132,10 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 	{
 		if (BasePawn->HasAuthority())
 		{
-			BasePawn->MulticastPlayAbilityMontageVisual(
+			BasePawn->StartAbilityMontageVisual(
 				MontageToPlay,
 				PlayRate,
-				StartSection,
-				MontageInstance->GetPosition(),
-				bDisableAnimRootMotion && MontageToPlay->HasRootMotion()
+				MontageInstance->GetPosition()
 			);
 		}
 	}
@@ -263,7 +261,7 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 	{
 		if (BasePawn->HasAuthority())
 		{
-			BasePawn->MulticastStopAbilityMontageVisual(MontageToPlay, 0.15f);
+			BasePawn->StopAbilityMontageVisual(MontageToPlay);
 		}
 
 		BasePawn->ResetAbilityAnimState();
@@ -283,7 +281,7 @@ void UPL_PlayMoverMontageAndWait::ExternalCancel()
 	{
 		if (BasePawn->HasAuthority())
 		{
-			BasePawn->MulticastStopAbilityMontageVisual(MontageToPlay, 0.15f);
+			BasePawn->StopAbilityMontageVisual(MontageToPlay);
 		}
 
 		BasePawn->ResetAbilityAnimState();

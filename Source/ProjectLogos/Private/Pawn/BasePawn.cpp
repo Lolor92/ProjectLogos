@@ -1,6 +1,7 @@
 #include "Pawn/BasePawn.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
+#include "GameFramework/GameStateBase.h"
 #include "Combat/Components/PL_CombatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -57,6 +58,7 @@ void ABasePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(ABasePawn, AbilityAnimState);
+	DOREPLIFETIME_CONDITION(ABasePawn, AbilityMontageVisualState, COND_SkipOwner);
 }
 
 UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const
@@ -264,20 +266,69 @@ void ABasePawn::ApplyAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 	);
 }
 
-void ABasePawn::MulticastPlayAbilityMontageVisual_Implementation(
+float ABasePawn::GetServerTimeSecondsSafe() const
+{
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return 0.f;
+	}
+
+	if (const AGameStateBase* GameState = World->GetGameState())
+	{
+		return GameState->GetServerWorldTimeSeconds();
+	}
+
+	return World->GetTimeSeconds();
+}
+
+void ABasePawn::StartAbilityMontageVisual(
 	UAnimMontage* Montage,
-	float InPlayRate,
-	FName InStartSection,
-	float InStartPosition,
-	bool bDisableRootMotion
+	float PlayRate,
+	float StartPosition
 )
 {
-	if (!Montage || !MeshComponent)
+	if (!HasAuthority() || !Montage)
 	{
 		return;
 	}
 
-	if (HasAuthority() || IsLocallyControlled())
+	AbilityMontageVisualState.Montage = Montage;
+	AbilityMontageVisualState.PlayRate = PlayRate;
+	AbilityMontageVisualState.StartPosition = StartPosition;
+	AbilityMontageVisualState.ServerStartTime = GetServerTimeSecondsSafe();
+	AbilityMontageVisualState.bIsPlaying = true;
+	++AbilityMontageVisualState.SequenceId;
+
+	ForceNetUpdate();
+}
+
+void ABasePawn::StopAbilityMontageVisual(UAnimMontage* Montage)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	if (Montage && AbilityMontageVisualState.Montage != Montage)
+	{
+		return;
+	}
+
+	AbilityMontageVisualState.bIsPlaying = false;
+	++AbilityMontageVisualState.SequenceId;
+
+	ForceNetUpdate();
+}
+
+void ABasePawn::OnRep_AbilityMontageVisualState()
+{
+	ApplyAbilityMontageVisualState();
+}
+
+void ABasePawn::ApplyAbilityMontageVisualState()
+{
+	if (!MeshComponent)
 	{
 		return;
 	}
@@ -288,39 +339,63 @@ void ABasePawn::MulticastPlayAbilityMontageVisual_Implementation(
 		return;
 	}
 
-	const float MontageLength = AnimInstance->Montage_Play(Montage, InPlayRate);
-	if (MontageLength <= 0.f)
+	UAnimMontage* Montage = AbilityMontageVisualState.Montage;
+	if (!Montage)
 	{
 		return;
 	}
 
-	if (InStartSection != NAME_None)
+	if (!AbilityMontageVisualState.bIsPlaying)
 	{
-		AnimInstance->Montage_JumpToSection(InStartSection, Montage);
+		if (AnimInstance->Montage_IsPlaying(Montage))
+		{
+			AnimInstance->Montage_Stop(0.15f, Montage);
+		}
+
+		return;
 	}
 
-	AnimInstance->Montage_SetPosition(Montage, InStartPosition);
+	const float ServerNow = GetServerTimeSecondsSafe();
 
-	if (bDisableRootMotion)
+	const float DesiredPosition = FMath::Clamp(
+		AbilityMontageVisualState.StartPosition +
+		((ServerNow - AbilityMontageVisualState.ServerStartTime) * AbilityMontageVisualState.PlayRate),
+		0.f,
+		Montage->GetPlayLength()
+	);
+
+	if (!AnimInstance->Montage_IsPlaying(Montage))
 	{
-		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(Montage))
+		AnimInstance->Montage_Play(Montage, AbilityMontageVisualState.PlayRate);
+
+		if (FAnimMontageInstance* MontageInstance =
+			AnimInstance->GetActiveInstanceForMontage(Montage))
 		{
 			MontageInstance->PushDisableRootMotion();
 		}
 	}
+
+	AnimInstance->Montage_SetPosition(Montage, DesiredPosition);
 }
 
-void ABasePawn::MulticastStopAbilityMontageVisual_Implementation(
-	UAnimMontage* Montage,
-	float BlendOutTime
-)
+void ABasePawn::EnsureAbilityMontageVisual()
 {
-	if (!Montage || !MeshComponent)
+	if (IsLocallyControlled())
 	{
 		return;
 	}
 
-	if (HasAuthority() || IsLocallyControlled())
+	if (!AbilityMontageVisualState.bIsPlaying || !AbilityMontageVisualState.Montage)
+	{
+		return;
+	}
+
+	if (!AbilityAnimState.bAbilityRootMotionActive && !AbilityAnimState.bShouldBlendMontage)
+	{
+		return;
+	}
+
+	if (!MeshComponent)
 	{
 		return;
 	}
@@ -331,8 +406,8 @@ void ABasePawn::MulticastStopAbilityMontageVisual_Implementation(
 		return;
 	}
 
-	if (AnimInstance->Montage_IsPlaying(Montage))
+	if (!AnimInstance->Montage_IsPlaying(AbilityMontageVisualState.Montage))
 	{
-		AnimInstance->Montage_Stop(BlendOutTime, Montage);
+		ApplyAbilityMontageVisualState();
 	}
 }

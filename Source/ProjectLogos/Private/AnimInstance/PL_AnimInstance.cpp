@@ -34,16 +34,17 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		// No movement, no direction to calculate.
 		MovementDirectionYaw = 0.f;
-		return;
 	}
+	else
+	{
+		const FVector Velocity = OwningBasePawn->GetMoverVelocity();
+		const FRotator MovementRotation = Velocity.ToOrientationRotator();
+		const FRotator ActorRotation = OwningBasePawn->GetActorRotation();
 
-	const FVector Velocity = OwningBasePawn->GetMoverVelocity();
-	const FRotator MovementRotation = Velocity.ToOrientationRotator();
-	const FRotator ActorRotation = OwningBasePawn->GetActorRotation();
-
-	// Difference between where we move and where the pawn faces.
-	MovementDirectionYaw = UKismetMathLibrary::NormalizedDeltaRotator(
-		MovementRotation, ActorRotation).Yaw;
+		// Difference between where we move and where the pawn faces.
+		MovementDirectionYaw = UKismetMathLibrary::NormalizedDeltaRotator(
+			MovementRotation, ActorRotation).Yaw;
+	}
 
 	if (bShouldBlendMontage)
 	{
@@ -92,6 +93,11 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			MontageLength,
 			MontageWeight
 		);
+	}
+
+	if (ABasePawn* BasePawn = Cast<ABasePawn>(TryGetPawnOwner()))
+	{
+		BasePawn->EnsureAbilityMontageVisual();
 	}
 }
 
