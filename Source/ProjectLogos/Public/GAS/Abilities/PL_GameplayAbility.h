@@ -1,7 +1,8 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Abilities/GameplayAbility.h"
+#include "GameplayTagContainer.h"
 #include "TimerManager.h"
 #include "PL_GameplayAbility.generated.h"
 
@@ -32,6 +33,21 @@ struct FPLRootMotionReleaseSettings
 	bool bRequireMovementInputForRelease = true;
 };
 
+USTRUCT(BlueprintType)
+struct FPLMontageActivationLockoutSettings
+{
+	GENERATED_BODY()
+
+	// If true, another ability cannot interrupt this one until the montage reaches the required percent.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Montage Activation Lockout")
+	bool bUseMontageActivationLockout = false;
+
+	// Example: 45 means other abilities are blocked until this ability's montage reaches 45%.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Montage Activation Lockout",
+		meta=(EditCondition="bUseMontageActivationLockout", ClampMin="0.0", ClampMax="100.0", Units="Percent"))
+	float RequiredMontagePercentBeforeInterrupt = 0.f;
+};
+
 UCLASS(Abstract)
 class PROJECTLOGOS_API UPL_GameplayAbility : public UGameplayAbility
 {
@@ -39,6 +55,21 @@ class PROJECTLOGOS_API UPL_GameplayAbility : public UGameplayAbility
 
 public:
 	UPL_GameplayAbility();
+
+	virtual bool CanActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayTagContainer* SourceTags = nullptr,
+		const FGameplayTagContainer* TargetTags = nullptr,
+		FGameplayTagContainer* OptionalRelevantTags = nullptr
+	) const override;
+
+	virtual void ActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData
+	) override;
 
 	// Next ability to activate when this ability continues a combo.
 	UFUNCTION(BlueprintPure, Category="Ability|Combo")
@@ -56,6 +87,12 @@ public:
 	const FPLRootMotionReleaseSettings& GetRootMotionReleaseSettings() const
 	{
 		return RootMotionReleaseSettings;
+	}
+
+	UFUNCTION(BlueprintPure, Category="Ability|Activation Lockout")
+	const FPLMontageActivationLockoutSettings& GetMontageActivationLockoutSettings() const
+	{
+		return MontageActivationLockoutSettings;
 	}
 
 protected:
@@ -78,7 +115,30 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Root Motion")
 	FPLRootMotionReleaseSettings RootMotionReleaseSettings;
 
+	// This ability protects itself while its montage is playing.
+	// Other abilities cannot activate until this montage reaches the configured percent.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Activation Lockout")
+	FPLMontageActivationLockoutSettings MontageActivationLockoutSettings;
+
+	// This ability ignores the active montage lockout.
+	// Use for dodge, death, knockdown, stagger, emergency reactions, etc.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Activation Lockout")
+	bool bBypassMontageActivationLockout = false;
+
+	// Old-project style behavior: after this ability activates, cancel other active abilities.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Interrupt")
+	bool bCancelOtherAbilitiesOnActivate = false;
+
 private:
+	bool CanUseAbility(const FGameplayAbilityActorInfo* ActorInfo) const;
+
+	bool CanInterruptActiveMontageAbility(
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const UGameplayAbility* ActiveAbility,
+		const UAnimMontage* ActiveMontage
+	) const;
+
+	void CancelOtherActiveAbilities() const;
 	void ResetComboWindow();
 
 	FTimerHandle ComboWindowTimerHandle;

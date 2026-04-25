@@ -1,15 +1,15 @@
-﻿#include "Mover/PL_PlayMoverMontageAndWait.h"
+#include "Mover/PL_PlayMoverMontageAndWait.h"
 #include "Abilities/GameplayAbility.h"
 #include "AbilitySystemComponent.h"
-#include "GAS/Abilities/PL_GameplayAbility.h"
 #include "Animation/AnimInstance.h"
-#include "DefaultMovementSet/CharacterMoverComponent.h"
-#include "GameFramework/Actor.h"
 #include "Animation/AnimMontage.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "DefaultMovementSet/CharacterMoverComponent.h"
+#include "GameFramework/Actor.h"
+#include "GAS/Abilities/PL_GameplayAbility.h"
+#include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "Mover/PL_ScaledAnimRootMotionLayeredMove.h"
 #include "Pawn/BasePawn.h"
-
 
 UPL_PlayMoverMontageAndWait* UPL_PlayMoverMontageAndWait::PlayMoverMontageAndWait(
 	UGameplayAbility* OwningAbility,
@@ -65,8 +65,8 @@ void UPL_PlayMoverMontageAndWait::Activate()
 	}
 
 	MeshComponent = ASC->GetAvatarActor()
-	? ASC->GetAvatarActor()->FindComponentByClass<USkeletalMeshComponent>()
-	: nullptr;
+		? ASC->GetAvatarActor()->FindComponentByClass<USkeletalMeshComponent>()
+		: nullptr;
 
 	AnimInstance = MeshComponent
 		? MeshComponent->GetAnimInstance()
@@ -115,7 +115,7 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 	}
 	
 	FAnimMontageInstance* MontageInstance =
-	AnimInstance->GetActiveInstanceForMontage(MontageToPlay);
+		AnimInstance->GetActiveInstanceForMontage(MontageToPlay);
 
 	if (!MontageInstance) return false;
 
@@ -140,6 +140,14 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 		QueueScaledRootMotionMove(MontageInstance->GetPosition());
 	}
 
+	if (UPL_AbilitySystemComponent* PLASC = Cast<UPL_AbilitySystemComponent>(AbilitySystemComponent.Get()))
+	{
+		if (UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(Ability))
+		{
+			PLASC->SetActiveMoverMontageAbility(PLAbility, MontageToPlay);
+		}
+	}
+
 	// Listen for montage blend-out and end so the task can finish cleanly.
 	FOnMontageBlendingOutStarted BlendOutDelegate;
 	BlendOutDelegate.BindUObject(this, &UPL_PlayMoverMontageAndWait::OnMontageBlendingOut);
@@ -159,7 +167,7 @@ void UPL_PlayMoverMontageAndWait::QueueScaledRootMotionMove(float StartingMontag
 	if (!CharacterMoverComponent || !MontageToPlay) return;
 	
 	TSharedPtr<FPL_ScaledAnimRootMotionLayeredMove> RootMotionMove =
-			MakeShared<FPL_ScaledAnimRootMotionLayeredMove>();
+		MakeShared<FPL_ScaledAnimRootMotionLayeredMove>();
 
 	RootMotionMove->MontageState.Montage = MontageToPlay;
 	RootMotionMove->MontageState.PlayRate = PlayRate;
@@ -199,6 +207,14 @@ void UPL_PlayMoverMontageAndWait::OnMontageBlendingOut(UAnimMontage* InMontage, 
 {
 	if (InMontage != MontageToPlay) return;
 
+	if (UPL_AbilitySystemComponent* PLASC = Cast<UPL_AbilitySystemComponent>(AbilitySystemComponent.Get()))
+	{
+		if (UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(Ability))
+		{
+			PLASC->ClearActiveMoverMontageAbility(PLAbility, MontageToPlay);
+		}
+	}
+
 	if (!ShouldBroadcastAbilityTaskDelegates()) return;
 
 	if (bInterrupted)
@@ -217,6 +233,14 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 	if (InMontage != MontageToPlay)
 	{
 		return;
+	}
+
+	if (UPL_AbilitySystemComponent* PLASC = Cast<UPL_AbilitySystemComponent>(AbilitySystemComponent.Get()))
+	{
+		if (UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(Ability))
+		{
+			PLASC->ClearActiveMoverMontageAbility(PLAbility, MontageToPlay);
+		}
 	}
 
 	if (BasePawn)
@@ -239,6 +263,14 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 
 void UPL_PlayMoverMontageAndWait::ExternalCancel()
 {
+	if (UPL_AbilitySystemComponent* PLASC = Cast<UPL_AbilitySystemComponent>(AbilitySystemComponent.Get()))
+	{
+		if (UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(Ability))
+		{
+			PLASC->ClearActiveMoverMontageAbility(PLAbility, MontageToPlay);
+		}
+	}
+
 	if (ABasePawn* BasePawn = GetAvatarBasePawn())
 	{
 		if (BasePawn->HasAuthority())
@@ -255,6 +287,14 @@ void UPL_PlayMoverMontageAndWait::ExternalCancel()
 
 void UPL_PlayMoverMontageAndWait::OnDestroy(bool bInOwnerFinished)
 {
+	if (UPL_AbilitySystemComponent* PLASC = Cast<UPL_AbilitySystemComponent>(AbilitySystemComponent.Get()))
+	{
+		if (UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(Ability))
+		{
+			PLASC->ClearActiveMoverMontageAbility(PLAbility, MontageToPlay);
+		}
+	}
+
 	if (bStopWhenAbilityEnds)
 	{
 		StopPlayingMontage();
