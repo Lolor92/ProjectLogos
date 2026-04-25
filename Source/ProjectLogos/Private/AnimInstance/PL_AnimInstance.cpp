@@ -65,11 +65,26 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			}
 		}
 
+		const ENetMode NetMode = GetWorld() ? GetWorld()->GetNetMode() : NM_MAX;
+
+		const TCHAR* NetModeText = TEXT("Unknown");
+		switch (NetMode)
+		{
+		case NM_Standalone: NetModeText = TEXT("Standalone"); break;
+		case NM_DedicatedServer: NetModeText = TEXT("DedicatedServer"); break;
+		case NM_ListenServer: NetModeText = TEXT("ListenServer"); break;
+		case NM_Client: NetModeText = TEXT("Client"); break;
+		default: break;
+		}
+
 		const APawn* PawnOwner = TryGetPawnOwner();
 
 		UE_LOG(LogTemp, Warning,
-			TEXT("ANIM_BLEND_TICK Pawn=%s Local=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
+			TEXT("ANIM_BLEND_TICK World=%s Anim=%s Pawn=%s Authority=%d Local=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
+			NetModeText,
+			*GetNameSafe(this),
 			*GetNameSafe(PawnOwner),
+			PawnOwner ? PawnOwner->HasAuthority() : false,
 			PawnOwner ? PawnOwner->IsLocallyControlled() : false,
 			bShouldBlendMontage,
 			*GetNameSafe(CurrentMontage),
@@ -83,4 +98,21 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 void UPL_AnimInstance::SetShouldBlendMontage(bool bNewShouldBlendMontage)
 {
 	bShouldBlendMontage = bNewShouldBlendMontage;
+}
+
+void UPL_AnimInstance::SetAbilityAnimState(
+	bool bNewAbilityRootMotionActive,
+	bool bNewShouldBlendMontage
+)
+{
+	bAbilityRootMotionActive = bNewAbilityRootMotionActive;
+	bShouldBlendMontage = bNewShouldBlendMontage;
+
+	UE_LOG(LogTemp, Warning,
+		TEXT("ANIM_SET_ABILITY_STATE Pawn=%s Local=%d RMActive=%d Blend=%d"),
+		*GetNameSafe(TryGetPawnOwner()),
+		TryGetPawnOwner() ? TryGetPawnOwner()->IsLocallyControlled() : false,
+		bAbilityRootMotionActive,
+		bShouldBlendMontage
+	);
 }

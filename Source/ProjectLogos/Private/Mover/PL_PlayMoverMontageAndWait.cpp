@@ -100,7 +100,10 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 {
 	if (!AnimInstance || !MontageToPlay) return false;
 	
-	SetAvatarShouldBlendMontage(false, TEXT("PlayScaledMoverMontage_Start"));
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		BasePawn->SetAbilityAnimStateValues(true, false);
+	}
 	
 	const float MontageLength = AnimInstance->Montage_Play(MontageToPlay, PlayRate);
 
@@ -124,6 +127,20 @@ bool UPL_PlayMoverMontageAndWait::PlayScaledMoverMontage()
 	AnimInstance->GetActiveInstanceForMontage(MontageToPlay);
 
 	if (!MontageInstance) return false;
+
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		if (BasePawn->HasAuthority())
+		{
+			BasePawn->MulticastPlayAbilityMontageVisual(
+				MontageToPlay,
+				PlayRate,
+				StartSection,
+				MontageInstance->GetPosition(),
+				bDisableAnimRootMotion && MontageToPlay->HasRootMotion()
+			);
+		}
+	}
 
 	if (bDisableAnimRootMotion && PlayRate != 0.f && MontageToPlay->HasRootMotion())
 	{
@@ -242,7 +259,15 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 		return;
 	}
 
-	SetAvatarShouldBlendMontage(false, TEXT("OnMontageEnded"));
+	if (BasePawn)
+	{
+		if (BasePawn->HasAuthority())
+		{
+			BasePawn->MulticastStopAbilityMontageVisual(MontageToPlay, 0.15f);
+		}
+
+		BasePawn->ResetAbilityAnimState();
+	}
 
 	if (ShouldBroadcastAbilityTaskDelegates() && !bInterrupted)
 	{
@@ -254,7 +279,15 @@ void UPL_PlayMoverMontageAndWait::OnMontageEnded(UAnimMontage* InMontage, bool b
 
 void UPL_PlayMoverMontageAndWait::ExternalCancel()
 {
-	SetAvatarShouldBlendMontage(false, TEXT("ExternalCancel"));
+	if (ABasePawn* BasePawn = GetAvatarBasePawn())
+	{
+		if (BasePawn->HasAuthority())
+		{
+			BasePawn->MulticastStopAbilityMontageVisual(MontageToPlay, 0.15f);
+		}
+
+		BasePawn->ResetAbilityAnimState();
+	}
 
 	OnCancelled.Broadcast();
 	Super::ExternalCancel();
@@ -262,29 +295,22 @@ void UPL_PlayMoverMontageAndWait::ExternalCancel()
 
 void UPL_PlayMoverMontageAndWait::OnDestroy(bool bInOwnerFinished)
 {
-	const bool bMontageStillPlaying =
-		AnimInstance &&
-		MontageToPlay &&
-		AnimInstance->Montage_IsPlaying(MontageToPlay);
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("TASK_DESTROY Pawn=%s Authority=%d Local=%d OwnerFinished=%d StopWhenAbilityEnds=%d MontageStillPlaying=%d"),
-		*GetNameSafe(GetAvatarBasePawn()),
-		GetAvatarBasePawn() ? GetAvatarBasePawn()->HasAuthority() : false,
-		GetAvatarBasePawn() ? GetAvatarBasePawn()->IsLocallyControlled() : false,
-		bInOwnerFinished,
-		bStopWhenAbilityEnds,
-		bMontageStillPlaying
-	);
-
 	if (bStopWhenAbilityEnds)
 	{
 		StopPlayingMontage();
 	}
 
+	const bool bMontageStillPlaying =
+		AnimInstance &&
+		MontageToPlay &&
+		AnimInstance->Montage_IsPlaying(MontageToPlay);
+
 	if (!bMontageStillPlaying)
 	{
-		SetAvatarShouldBlendMontage(false, TEXT("OnDestroy_NotPlaying"));
+		if (ABasePawn* BasePawn = GetAvatarBasePawn())
+		{
+			BasePawn->ResetAbilityAnimState();
+		}
 	}
 
 	Super::OnDestroy(bInOwnerFinished);
@@ -321,27 +347,4 @@ ABasePawn* UPL_PlayMoverMontageAndWait::GetAvatarBasePawn() const
 	}
 
 	return Cast<ABasePawn>(Ability->GetAvatarActorFromActorInfo());
-}
-
-void UPL_PlayMoverMontageAndWait::SetAvatarShouldBlendMontage(
-	bool bNewValue,
-	const TCHAR* Source
-) const
-{
-	ABasePawn* BasePawn = GetAvatarBasePawn();
-
-	UE_LOG(LogTemp, Warning,
-		TEXT("TASK_SET_BLEND Source=%s Pawn=%s Authority=%d Local=%d New=%d Montage=%s"),
-		Source,
-		*GetNameSafe(BasePawn),
-		BasePawn ? BasePawn->HasAuthority() : false,
-		BasePawn ? BasePawn->IsLocallyControlled() : false,
-		bNewValue,
-		*GetNameSafe(MontageToPlay)
-	);
-
-	if (BasePawn)
-	{
-		BasePawn->SetShouldBlendMontage(bNewValue);
-	}
 }

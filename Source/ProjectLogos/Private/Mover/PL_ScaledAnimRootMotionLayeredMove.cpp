@@ -65,7 +65,7 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 	
 	if (bShouldReleaseRootMotion)
 	{
-		if (ABasePawn* BasePawn = Cast<ABasePawn>(MoverComp->GetOwner()))
+		if (ABasePawn* BasePawn = MoverComp ? Cast<ABasePawn>(MoverComp->GetOwner()) : nullptr)
 		{
 			const float MontageLength = MontageState.Montage ? MontageState.Montage->GetPlayLength() : 0.f;
 			const float WorldTime =
@@ -87,11 +87,9 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 			);
 
 			
-			// Only authority or owning client should publish this.
-			// Simulated proxies wait for replication.
 			if (BasePawn->HasAuthority() || BasePawn->IsLocallyControlled())
 			{
-				BasePawn->SetShouldBlendMontage(true);
+				BasePawn->SetAbilityAnimStateValues(false, true);
 			}
 		}
 

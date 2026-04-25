@@ -12,6 +12,36 @@ class UPL_MoverPawnComponent;
 class UAbilitySystemComponent;
 class UPL_AbilitySystemComponent;
 class UPL_CombatComponent;
+class UAnimMontage;
+
+USTRUCT(BlueprintType)
+struct FPLRepAbilityAnimState
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	uint8 bAbilityRootMotionActive : 1;
+
+	UPROPERTY()
+	uint8 bShouldBlendMontage : 1;
+
+	FPLRepAbilityAnimState()
+		: bAbilityRootMotionActive(false)
+		, bShouldBlendMontage(false)
+	{
+	}
+
+	bool operator==(const FPLRepAbilityAnimState& Other) const
+	{
+		return bAbilityRootMotionActive == Other.bAbilityRootMotionActive
+			&& bShouldBlendMontage == Other.bShouldBlendMontage;
+	}
+
+	bool operator!=(const FPLRepAbilityAnimState& Other) const
+	{
+		return !(*this == Other);
+	}
+};
 
 /**
  * Shared base pawn body.
@@ -57,25 +87,55 @@ public:
 	bool IsMoving() const;
 	
 	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
+	void SetAbilityAnimState(const FPLRepAbilityAnimState& NewState);
+
+	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
+	void SetAbilityAnimStateValues(bool bNewAbilityRootMotionActive, bool bNewShouldBlendMontage);
+
+	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
+	void ResetAbilityAnimState();
+
+	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
 	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
 
 	UFUNCTION(BlueprintPure, Category="Ability|Animation")
-	bool ShouldBlendMontage() const { return bShouldBlendMontage; }
+	const FPLRepAbilityAnimState& GetAbilityAnimState() const { return AbilityAnimState; }
+
+	UFUNCTION(BlueprintPure, Category="Ability|Animation")
+	bool IsAbilityRootMotionActive() const { return AbilityAnimState.bAbilityRootMotionActive; }
+
+	UFUNCTION(BlueprintPure, Category="Ability|Animation")
+	bool ShouldBlendMontage() const { return AbilityAnimState.bShouldBlendMontage; }
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastPlayAbilityMontageVisual(
+		UAnimMontage* Montage,
+		float InPlayRate,
+		FName InStartSection,
+		float InStartPosition,
+		bool bDisableRootMotion
+	);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void MulticastStopAbilityMontageVisual(
+		UAnimMontage* Montage,
+		float BlendOutTime
+	);
 
 protected:
 	// Initializes this pawn as the avatar for an ASC.
 	void InitializeAbilitySystem(UPL_AbilitySystemComponent* InAbilitySystemComponent, AActor* OwnerActor);
 	
-	UPROPERTY(ReplicatedUsing=OnRep_ShouldBlendMontage, BlueprintReadOnly, Category="Ability|Animation")
-	bool bShouldBlendMontage = false;
+	UPROPERTY(ReplicatedUsing=OnRep_AbilityAnimState, BlueprintReadOnly, Category="Ability|Animation")
+	FPLRepAbilityAnimState AbilityAnimState;
 
 	UFUNCTION()
-	void OnRep_ShouldBlendMontage();
+	void OnRep_AbilityAnimState();
 
 	UFUNCTION(Server, Reliable)
-	void ServerSetShouldBlendMontage(bool bNewShouldBlendMontage);
+	void ServerSetAbilityAnimState(const FPLRepAbilityAnimState& NewState);
 
-	void ApplyShouldBlendMontage();
+	void ApplyAbilityAnimState(const FPLRepAbilityAnimState& NewState);
 
 	// Main collision body. Mover moves this.
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category="Components")

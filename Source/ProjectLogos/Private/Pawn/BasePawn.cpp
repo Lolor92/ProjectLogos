@@ -1,4 +1,6 @@
 #include "Pawn/BasePawn.h"
+#include "Animation/AnimInstance.h"
+#include "Animation/AnimMontage.h"
 #include "Combat/Components/PL_CombatComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -54,7 +56,7 @@ void ABasePawn::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetim
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(ABasePawn, bShouldBlendMontage);
+	DOREPLIFETIME(ABasePawn, AbilityAnimState);
 }
 
 UAbilitySystemComponent* ABasePawn::GetAbilitySystemComponent() const
@@ -97,77 +99,106 @@ bool ABasePawn::IsMoving() const
 	return GetGroundSpeed() > KINDA_SMALL_NUMBER;
 }
 
-void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
+void ABasePawn::SetAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 {
 	UE_LOG(LogTemp, Warning,
-		TEXT("SET_BLEND Request Pawn=%s Authority=%d Local=%d Old=%d New=%d"),
+		TEXT("SET_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive %d->%d Blend %d->%d"),
 		*GetNameSafe(this),
 		HasAuthority(),
 		IsLocallyControlled(),
-		bShouldBlendMontage,
-		bNewShouldBlendMontage
+		AbilityAnimState.bAbilityRootMotionActive,
+		NewState.bAbilityRootMotionActive,
+		AbilityAnimState.bShouldBlendMontage,
+		NewState.bShouldBlendMontage
 	);
 	
-	if (bShouldBlendMontage == bNewShouldBlendMontage)
+	if (AbilityAnimState == NewState)
 	{
 		return;
 	}
 
-	bShouldBlendMontage = bNewShouldBlendMontage;
+	AbilityAnimState = NewState;
 
-	// Immediate local update.
-	ApplyShouldBlendMontage();
+	ApplyAbilityAnimState(AbilityAnimState);
 
-	if (HasAuthority())
+	if (!HasAuthority())
 	{
-		ForceNetUpdate();
+		if (IsLocallyControlled())
+		{
+			ServerSetAbilityAnimState(AbilityAnimState);
+		}
+
 		return;
 	}
 
-	// Only the owning client should ask the server to replicate this.
-	// Simulated proxies should wait for OnRep.
-	if (IsLocallyControlled())
-	{
-		ServerSetShouldBlendMontage(bNewShouldBlendMontage);
-	}
-}
-
-void ABasePawn::ServerSetShouldBlendMontage_Implementation(bool bNewShouldBlendMontage)
-{
-	UE_LOG(LogTemp, Warning,
-		TEXT("SERVER_BLEND Pawn=%s Authority=%d Local=%d Old=%d New=%d"),
-		*GetNameSafe(this),
-		HasAuthority(),
-		IsLocallyControlled(),
-		bShouldBlendMontage,
-		bNewShouldBlendMontage
-	);
-	
-	if (bShouldBlendMontage == bNewShouldBlendMontage)
-	{
-		return;
-	}
-
-	bShouldBlendMontage = bNewShouldBlendMontage;
-
-	ApplyShouldBlendMontage();
 	ForceNetUpdate();
 }
 
-void ABasePawn::OnRep_ShouldBlendMontage()
+void ABasePawn::SetAbilityAnimStateValues(
+	bool bNewAbilityRootMotionActive,
+	bool bNewShouldBlendMontage
+)
+{
+	FPLRepAbilityAnimState NewState;
+	NewState.bAbilityRootMotionActive = bNewAbilityRootMotionActive;
+	NewState.bShouldBlendMontage = bNewShouldBlendMontage;
+
+	SetAbilityAnimState(NewState);
+}
+
+void ABasePawn::SetShouldBlendMontage(bool bNewShouldBlendMontage)
+{
+	FPLRepAbilityAnimState NewState = AbilityAnimState;
+	NewState.bShouldBlendMontage = bNewShouldBlendMontage;
+
+	SetAbilityAnimState(NewState);
+}
+
+void ABasePawn::ResetAbilityAnimState()
+{
+	FPLRepAbilityAnimState DefaultState;
+	SetAbilityAnimState(DefaultState);
+}
+
+void ABasePawn::ServerSetAbilityAnimState_Implementation(const FPLRepAbilityAnimState& NewState)
 {
 	UE_LOG(LogTemp, Warning,
-		TEXT("ONREP_BLEND Pawn=%s Authority=%d Local=%d Blend=%d"),
+		TEXT("SERVER_SET_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive %d->%d Blend %d->%d"),
 		*GetNameSafe(this),
 		HasAuthority(),
 		IsLocallyControlled(),
-		bShouldBlendMontage
+		AbilityAnimState.bAbilityRootMotionActive,
+		NewState.bAbilityRootMotionActive,
+		AbilityAnimState.bShouldBlendMontage,
+		NewState.bShouldBlendMontage
 	);
 	
-	ApplyShouldBlendMontage();
+	if (AbilityAnimState == NewState)
+	{
+		return;
+	}
+
+	AbilityAnimState = NewState;
+
+	ApplyAbilityAnimState(AbilityAnimState);
+	ForceNetUpdate();
 }
 
-void ABasePawn::ApplyShouldBlendMontage()
+void ABasePawn::OnRep_AbilityAnimState()
+{
+	UE_LOG(LogTemp, Warning,
+		TEXT("ONREP_ABILITY_ANIM_STATE Pawn=%s Authority=%d Local=%d RMActive=%d Blend=%d"),
+		*GetNameSafe(this),
+		HasAuthority(),
+		IsLocallyControlled(),
+		AbilityAnimState.bAbilityRootMotionActive,
+		AbilityAnimState.bShouldBlendMontage
+	);
+	
+	ApplyAbilityAnimState(AbilityAnimState);
+}
+
+void ABasePawn::ApplyAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 {
 	if (!MeshComponent)
 	{
@@ -182,7 +213,10 @@ void ABasePawn::ApplyShouldBlendMontage()
 		return;
 	}
 
-	PLAnimInstance->SetShouldBlendMontage(bShouldBlendMontage);
+	PLAnimInstance->SetAbilityAnimState(
+		NewState.bAbilityRootMotionActive,
+		NewState.bShouldBlendMontage
+	);
 
 	UAnimMontage* CurrentMontage = PLAnimInstance->GetCurrentActiveMontage();
 
@@ -202,16 +236,103 @@ void ABasePawn::ApplyShouldBlendMontage()
 		}
 	}
 
+	const ENetMode NetMode = GetWorld() ? GetWorld()->GetNetMode() : NM_MAX;
+
+	const TCHAR* NetModeText = TEXT("Unknown");
+	switch (NetMode)
+	{
+	case NM_Standalone: NetModeText = TEXT("Standalone"); break;
+	case NM_DedicatedServer: NetModeText = TEXT("DedicatedServer"); break;
+	case NM_ListenServer: NetModeText = TEXT("ListenServer"); break;
+	case NM_Client: NetModeText = TEXT("Client"); break;
+	default: break;
+	}
+
 	UE_LOG(LogTemp, Warning,
-		TEXT("APPLY_BLEND Pawn=%s Authority=%d Local=%d Blend=%d CurrentMontage=%s Pos=%.3f Len=%.3f Weight=%.3f AnimVar=%d"),
+		TEXT("APPLY_ABILITY_ANIM_STATE World=%s Pawn=%s Anim=%s Authority=%d Local=%d RMActive=%d Blend=%d Montage=%s Pos=%.3f Len=%.3f Weight=%.3f"),
+		NetModeText,
 		*GetNameSafe(this),
+		*GetNameSafe(PLAnimInstance),
 		HasAuthority(),
 		IsLocallyControlled(),
-		bShouldBlendMontage,
+		NewState.bAbilityRootMotionActive,
+		NewState.bShouldBlendMontage,
 		*GetNameSafe(CurrentMontage),
 		MontagePosition,
 		MontageLength,
-		MontageWeight,
-		PLAnimInstance->GetShouldBlendMontage_Debug()
+		MontageWeight
 	);
+}
+
+void ABasePawn::MulticastPlayAbilityMontageVisual_Implementation(
+	UAnimMontage* Montage,
+	float InPlayRate,
+	FName InStartSection,
+	float InStartPosition,
+	bool bDisableRootMotion
+)
+{
+	if (!Montage || !MeshComponent)
+	{
+		return;
+	}
+
+	if (HasAuthority() || IsLocallyControlled())
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance();
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	const float MontageLength = AnimInstance->Montage_Play(Montage, InPlayRate);
+	if (MontageLength <= 0.f)
+	{
+		return;
+	}
+
+	if (InStartSection != NAME_None)
+	{
+		AnimInstance->Montage_JumpToSection(InStartSection, Montage);
+	}
+
+	AnimInstance->Montage_SetPosition(Montage, InStartPosition);
+
+	if (bDisableRootMotion)
+	{
+		if (FAnimMontageInstance* MontageInstance = AnimInstance->GetActiveInstanceForMontage(Montage))
+		{
+			MontageInstance->PushDisableRootMotion();
+		}
+	}
+}
+
+void ABasePawn::MulticastStopAbilityMontageVisual_Implementation(
+	UAnimMontage* Montage,
+	float BlendOutTime
+)
+{
+	if (!Montage || !MeshComponent)
+	{
+		return;
+	}
+
+	if (HasAuthority() || IsLocallyControlled())
+	{
+		return;
+	}
+
+	UAnimInstance* AnimInstance = MeshComponent->GetAnimInstance();
+	if (!AnimInstance)
+	{
+		return;
+	}
+
+	if (AnimInstance->Montage_IsPlaying(Montage))
+	{
+		AnimInstance->Montage_Stop(BlendOutTime, Montage);
+	}
 }

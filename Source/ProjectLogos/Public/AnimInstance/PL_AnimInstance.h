@@ -20,6 +20,9 @@ public:
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
 	
 	UFUNCTION(BlueprintCallable, Category="Anim|Ability")
+	void SetAbilityAnimState(bool bNewAbilityRootMotionActive, bool bNewShouldBlendMontage);
+
+	UFUNCTION(BlueprintCallable, Category="Anim|Ability")
 	void SetShouldBlendMontage(bool bNewShouldBlendMontage);
 
 	bool GetShouldBlendMontage_Debug() const { return bShouldBlendMontage; }
@@ -41,6 +44,9 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category="Animation")
 	float MovementDirectionYaw = 0.f;
 	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|Ability")
+	bool bAbilityRootMotionActive = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|Ability")
 	bool bShouldBlendMontage = false;
 };
