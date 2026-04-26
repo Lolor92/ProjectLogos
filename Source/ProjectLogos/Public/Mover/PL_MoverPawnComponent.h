@@ -43,6 +43,12 @@ protected:
 	// Finds and configures the owner pawn's Mover pieces.
 	virtual void BeginPlay() override;
 
+	virtual void TickComponent(
+		float DeltaTime,
+		ELevelTick TickType,
+		FActorComponentTickFunction* ThisTickFunction
+	) override;
+
 	void ResolveOwnerComponents();
 
 	// Mover calls this when it needs movement input.
@@ -69,7 +75,8 @@ protected:
 	bool bOrientToCameraYaw = true;
 
 private:
-	void ApplyFacingSnapOnce(float Yaw);
+	void QueueFacingSnapAfterMover(float Yaw);
+	void ApplyFacingSnapOnce(float Yaw) const;
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestForcedFacingYaw(float Yaw);
@@ -77,6 +84,9 @@ private:
 	bool bHasForcedFacingIntent = false;
 
 	FVector ForcedFacingIntent = FVector::ZeroVector;
+
+	bool bHasPendingFacingSnap = false;
+	float PendingFacingSnapYaw = 0.f;
 
 	// Local input direction. Usually X = forward, Y = right.
 	FVector CachedMoveInputIntent = FVector::ZeroVector;
