@@ -55,10 +55,55 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 {
-	const FRotator YawRotation(0.f, FRotator::NormalizeAxis(Yaw), 0.f);
+	Yaw = FRotator::NormalizeAxis(Yaw);
 
+	const FRotator YawRotation(0.f, Yaw, 0.f);
+
+	// One Mover input hint, consumed once in ProduceInput.
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
+
+	// Immediate visual + local movement state snap.
+	ApplyFacingSnapOnce(Yaw);
+
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (OwnerPawn && OwnerPawn->IsLocallyControlled() && !OwnerPawn->HasAuthority())
+	{
+		ServerRequestForcedFacingYaw(Yaw);
+	}
+}
+
+void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Yaw)
+{
+	Yaw = FRotator::NormalizeAxis(Yaw);
+
+	const FRotator YawRotation(0.f, Yaw, 0.f);
+
+	// Give server-side Mover the same one-shot orientation hint.
+	ForcedFacingIntent = YawRotation.Vector();
+	bHasForcedFacingIntent = true;
+
+	// Server authoritative one-shot snap.
+	ApplyFacingSnapOnce(Yaw);
+}
+
+void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return;
+	}
+
+	FRotator NewRotation = OwnerActor->GetActorRotation();
+	NewRotation.Yaw = FRotator::NormalizeAxis(Yaw);
+
+	OwnerActor->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
+
+	if (OwnerActor->HasAuthority())
+	{
+		OwnerActor->ForceNetUpdate();
+	}
 }
 
 void UPL_MoverPawnComponent::ClearMoveIntent()

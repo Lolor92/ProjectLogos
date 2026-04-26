@@ -69,6 +69,11 @@ protected:
 	bool bOrientToCameraYaw = true;
 
 private:
+	void ApplyFacingSnapOnce(float Yaw);
+
+	UFUNCTION(Server, Reliable)
+	void ServerRequestForcedFacingYaw(float Yaw);
+
 	bool bHasForcedFacingIntent = false;
 
 	FVector ForcedFacingIntent = FVector::ZeroVector;
