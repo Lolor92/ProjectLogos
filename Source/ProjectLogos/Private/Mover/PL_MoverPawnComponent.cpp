@@ -551,15 +551,17 @@ bool UPL_MoverPawnComponent::IsMovingBackward(const FVector& WorldMoveIntent) co
 	return ForwardDot <= BackwardDotThreshold;
 }
 
-float UPL_MoverPawnComponent::GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const
+float UPL_MoverPawnComponent::GetMovementInputSpeedMultiplier(
+	const FVector& WorldMoveIntent) const
 {
-	// Important: blocking wins first, same as the old CMC version.
-	// This prevents blocking + backward from multiplying together.
+	// Blocking reduces movement in every direction.
+	// This wins first so blocking + backward does NOT stack.
 	if (IsBlockingMovementActive())
 	{
 		return FMath::Clamp(BlockingSpeedMultiplier, 0.f, 1.f);
 	}
 
+	// Backward reduction only applies when NOT blocking.
 	if (IsMovingBackward(WorldMoveIntent))
 	{
 		return FMath::Clamp(BackwardSpeedMultiplier, 0.f, 1.f);
@@ -587,10 +589,7 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	if (!PlayerController)
 	{
 		// NPCs or non-player pawns can still use raw world input.
-		const float SpeedMultiplier = GetMovementInputSpeedMultiplier(CachedMoveInputIntent);
-		const FVector ScaledMoveIntent = CachedMoveInputIntent * SpeedMultiplier;
-
-		CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, ScaledMoveIntent);
+		CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, CachedMoveInputIntent);
 
 		if (CachedMoveInputIntent.SizeSquared2D() > 0.01f)
 		{

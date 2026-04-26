@@ -114,7 +114,7 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions")
 	TObjectPtr<UPL_TagReactionData> TagReactionData = nullptr;
 
-	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Block")
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Block")
 	FGameplayTag BlockingTag;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
