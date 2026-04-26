@@ -1,9 +1,12 @@
 ﻿#include "Mover/PL_MoverPawnComponent.h"
+#include "Backends/MoverBackendLiaison.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
+#include "MoverSimulationTypes.h"
 
 UPL_MoverPawnComponent::UPL_MoverPawnComponent()
 {
@@ -112,10 +115,14 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 
 	OwnerActor->SetActorRotation(NewRotation, ETeleportType::TeleportPhysics);
 
+	// This is the missing piece:
+	// push the new actor/root rotation into Mover's pending sync state.
+	WriteCurrentTransformToMoverSyncState();
+
 	UE_LOG(
 		LogTemp,
 		Warning,
-		TEXT("Facing snap applied. Actor=%s DesiredYaw=%.2f ResultYaw=%.2f Authority=%d Local=%d"),
+		TEXT("Facing snap applied. Actor=%s DesiredYaw=%.2f ActorYaw=%.2f Authority=%d Local=%d"),
 		*GetNameSafe(OwnerActor),
 		Yaw,
 		OwnerActor->GetActorRotation().Yaw,
@@ -127,6 +134,75 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 	{
 		OwnerActor->ForceNetUpdate();
 	}
+}
+
+void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !UpdatedComponent)
+	{
+		return;
+	}
+
+	UActorComponent* LiaisonActorComponent =
+		OwnerActor->FindComponentByInterface(UMoverBackendLiaisonInterface::StaticClass());
+	IMoverBackendLiaisonInterface* LiaisonComponent =
+		Cast<IMoverBackendLiaisonInterface>(LiaisonActorComponent);
+
+	if (!LiaisonComponent)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Facing snap could not update Mover sync state. No backend liaison found on %s."),
+			*GetNameSafe(OwnerActor)
+		);
+		return;
+	}
+
+	FMoverSyncState PendingSyncState;
+	if (!LiaisonComponent->ReadPendingSyncState(PendingSyncState))
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Facing snap could not read pending Mover sync state. Actor=%s"),
+			*GetNameSafe(OwnerActor)
+		);
+		return;
+	}
+
+	FMoverDefaultSyncState* DefaultSyncState =
+		PendingSyncState.SyncStateCollection.FindMutableDataByType<FMoverDefaultSyncState>();
+
+	if (!DefaultSyncState)
+	{
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("Facing snap could not find FMoverDefaultSyncState. Actor=%s"),
+			*GetNameSafe(OwnerActor)
+		);
+		return;
+	}
+
+	DefaultSyncState->SetTransforms_WorldSpace(
+		UpdatedComponent->GetComponentLocation(),
+		UpdatedComponent->GetComponentRotation(),
+		DefaultSyncState->GetVelocity_WorldSpace(),
+		DefaultSyncState->GetMovementBase(),
+		DefaultSyncState->GetMovementBaseBoneName()
+	);
+
+	LiaisonComponent->WritePendingSyncState(PendingSyncState);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("Facing snap wrote Mover sync state. Actor=%s SyncYaw=%.2f"),
+		*GetNameSafe(OwnerActor),
+		UpdatedComponent->GetComponentRotation().Yaw
+	);
 }
 
 void UPL_MoverPawnComponent::ClearMoveIntent()

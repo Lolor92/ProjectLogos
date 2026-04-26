@@ -70,6 +70,7 @@ protected:
 
 private:
 	void ApplyFacingSnapOnce(float Yaw) const;
+	void WriteCurrentTransformToMoverSyncState() const;
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestForcedFacingYaw(float Yaw);
