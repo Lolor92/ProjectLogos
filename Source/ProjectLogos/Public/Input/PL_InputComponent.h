@@ -98,6 +98,7 @@ private:
 	void HandleAbilityInputReleased(FGameplayTag InputTag);
 
 	bool TryActivateComboAbility(const FGameplayAbilitySpec& RequestedAbilitySpec);
+	void SnapOwnerFacingToControllerYawForAbility(const FGameplayAbilitySpec& AbilitySpec) const;
 	void UpdateComboChain(FGameplayAbilitySpecHandle StarterHandle, const FGameplayAbilitySpec& CurrentAbilitySpec);
 	void ClearComboChain(FGameplayAbilitySpecHandle StarterHandle);
 	void ClearAllComboChains();

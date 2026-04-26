@@ -81,6 +81,12 @@ public:
 	// True while this ability allows combo continuation.
 	UFUNCTION(BlueprintPure, Category="Ability|Combo")
 	bool IsComboWindowOpen() const { return bComboWindowOpen; }
+
+	UFUNCTION(BlueprintPure, Category="Ability|Rotation")
+	bool ShouldRotateToControllerYawOnActivate() const
+	{
+		return bRotateToControllerYawOnActivate;
+	}
 	
 	UFUNCTION(BlueprintPure, Category="Ability|Root Motion")
 	const FPLRootMotionReleaseSettings& GetRootMotionReleaseSettings() const

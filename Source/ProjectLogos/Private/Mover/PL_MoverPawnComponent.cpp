@@ -63,7 +63,7 @@ void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 
 	// A few frames is safer than one frame because ability activation and
 	// Mover input production may not happen in the exact same moment.
-	ForcedFacingFramesRemaining = 3;
+	ForcedFacingFramesRemaining = 8;
 }
 
 void UPL_MoverPawnComponent::ClearMoveIntent()

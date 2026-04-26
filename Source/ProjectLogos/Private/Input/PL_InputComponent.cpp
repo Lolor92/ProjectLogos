@@ -396,6 +396,7 @@ void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
 
 		if (bActivated)
 		{
+			SnapOwnerFacingToControllerYawForAbility(AbilitySpec);
 			UpdateComboChain(AbilitySpec.Handle, AbilitySpec);
 		}
 
@@ -414,6 +415,45 @@ void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
 			AbilitySpec.Handle,
 			PredictionKey
 		);
+	}
+}
+
+void UPL_InputComponent::SnapOwnerFacingToControllerYawForAbility(
+	const FGameplayAbilitySpec& AbilitySpec) const
+{
+	const UPL_GameplayAbility* PLAbility = Cast<UPL_GameplayAbility>(AbilitySpec.GetPrimaryInstance());
+
+	if (!PLAbility)
+	{
+		PLAbility = Cast<UPL_GameplayAbility>(AbilitySpec.Ability);
+	}
+
+	if (!PLAbility || !PLAbility->ShouldRotateToControllerYawOnActivate())
+	{
+		return;
+	}
+
+	ABasePawn* BasePawn = Cast<ABasePawn>(GetOwner());
+	if (!BasePawn || !BasePawn->IsLocallyControlled())
+	{
+		return;
+	}
+
+	const APlayerController* PlayerController = GetOwningPlayerController();
+	if (!PlayerController)
+	{
+		return;
+	}
+
+	const float DesiredYaw = PlayerController->GetControlRotation().Yaw;
+
+	FRotator NewRotation = BasePawn->GetActorRotation();
+	NewRotation.Yaw = DesiredYaw;
+	BasePawn->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
+
+	if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
+	{
+		MoverPawnComponent->RequestForcedFacingYaw(DesiredYaw);
 	}
 }
 
@@ -473,6 +513,7 @@ bool UPL_InputComponent::TryActivateComboAbility(const FGameplayAbilitySpec& Req
 
 		if (bActivated)
 		{
+			SnapOwnerFacingToControllerYawForAbility(ComboSpec);
 			// Keep the original starter handle, but advance the combo target.
 			UpdateComboChain(RequestedAbilitySpec.Handle, ComboSpec);
 		}
