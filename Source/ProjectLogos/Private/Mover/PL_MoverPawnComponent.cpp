@@ -190,6 +190,7 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 		UpdatedComponent->GetComponentLocation(),
 		UpdatedComponent->GetComponentRotation(),
 		DefaultSyncState->GetVelocity_WorldSpace(),
+		FVector::ZeroVector, // World angular velocity, degrees/sec
 		DefaultSyncState->GetMovementBase(),
 		DefaultSyncState->GetMovementBaseBoneName()
 	);
