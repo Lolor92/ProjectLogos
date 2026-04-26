@@ -84,6 +84,13 @@ bool UPL_CombatComponent::IsBlockingActive() const
 		&& AbilitySystemComponent->HasMatchingGameplayTag(BlockingTag);
 }
 
+bool UPL_CombatComponent::IsDodgingActive() const
+{
+	return AbilitySystemComponent
+		&& DodgingTag.IsValid()
+		&& AbilitySystemComponent->HasMatchingGameplayTag(DodgingTag);
+}
+
 bool UPL_CombatComponent::IsWithinBlockAngle(
 	const AActor* DefenderActor,
 	const AActor* AttackerActor,
@@ -144,6 +151,30 @@ bool UPL_CombatComponent::IsAttackBlocked(
 	);
 }
 
+bool UPL_CombatComponent::IsAttackDodged(
+	AActor* HitActor,
+	const FPLAttackOverlapDodgeSettings& DodgeSettings
+) const
+{
+	if (!DodgeSettings.bDodgeable || !HitActor)
+	{
+		return false;
+	}
+
+	if (!DodgingTag.IsValid())
+	{
+		return false;
+	}
+
+	const UAbilitySystemComponent* TargetASC = GetTargetAbilitySystemComponent(HitActor);
+	if (!TargetASC)
+	{
+		return false;
+	}
+
+	return TargetASC->HasMatchingGameplayTag(DodgingTag);
+}
+
 void UPL_CombatComponent::ApplyBlockGameplayEffects(
 	AActor* HitActor,
 	const FHitResult& Hit
@@ -165,6 +196,32 @@ void UPL_CombatComponent::ApplyBlockGameplayEffects(
 	ApplyGameplayEffectToActor(
 		HitActor,
 		DefenderBlockedEffectClass,
+		1.f,
+		&Hit
+	);
+}
+
+void UPL_CombatComponent::ApplyDodgeGameplayEffects(
+	AActor* HitActor,
+	const FHitResult& Hit
+) const
+{
+	AActor* AttackerActor = GetOwner();
+	if (!AttackerActor || !HitActor || !AttackerActor->HasAuthority())
+	{
+		return;
+	}
+
+	ApplyGameplayEffectToActor(
+		AttackerActor,
+		AttackerDodgedEffectClass,
+		1.f,
+		&Hit
+	);
+
+	ApplyGameplayEffectToActor(
+		HitActor,
+		DefenderDodgedEffectClass,
 		1.f,
 		&Hit
 	);
@@ -458,6 +515,27 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		}
 
 		Window.HitActors.Add(HitActorKey);
+	}
+
+	const bool bWasDodged = IsAttackDodged(
+		HitActor,
+		Window.Settings.Defense.Dodge
+	);
+
+	if (bWasDodged)
+	{
+		ApplyDodgeGameplayEffects(HitActor, Hit);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Attack overlap dodged. Attacker=%s Defender=%s"),
+			*GetNameSafe(GetOwner()),
+			*GetNameSafe(HitActor)
+		);
+
+		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
+		return;
 	}
 
 	const bool bWasBlocked = IsAttackBlocked(

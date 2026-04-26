@@ -294,12 +294,24 @@ struct FPLAttackOverlapBlockSettings
 };
 
 USTRUCT(BlueprintType)
+struct FPLAttackOverlapDodgeSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Dodge")
+	bool bDodgeable = false;
+};
+
+USTRUCT(BlueprintType)
 struct FPLAttackOverlapDefenseSettings
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense", meta=(ShowOnlyInnerProperties))
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block", meta=(ShowOnlyInnerProperties))
 	FPLAttackOverlapBlockSettings Block;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Dodge", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapDodgeSettings Dodge;
 };
 
 USTRUCT(BlueprintType)

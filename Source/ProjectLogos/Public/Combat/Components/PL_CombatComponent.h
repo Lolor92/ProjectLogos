@@ -80,6 +80,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Block")
 	bool IsBlockingActive() const;
 
+	UFUNCTION(BlueprintPure, Category="Combat|Dodge")
+	bool IsDodgingActive() const;
+
 	const FGameplayTag& GetBlockingTag() const { return BlockingTag; }
 
 	bool BeginAttackOverlapWindow(
@@ -129,6 +132,19 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Block")
 	TSubclassOf<UGameplayEffect> DefenderBlockedEffectClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
+	FGameplayTag DodgingTag;
+
+	// Applied to attacker when their hit is dodged.
+	// Example: GE_Trigger_AttackDodged, GE_WhiffRecovery, etc.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
+	TSubclassOf<UGameplayEffect> AttackerDodgedEffectClass;
+
+	// Applied to defender when they successfully dodge.
+	// Example: GE_Trigger_DodgeSuccess.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
+	TSubclassOf<UGameplayEffect> DefenderDodgedEffectClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
 	TArray<FPL_AnimBoolBinding> AnimBoolBindings;
 
@@ -171,12 +187,20 @@ private:
 		AActor* HitActor,
 		const FPLAttackOverlapBlockSettings& BlockSettings
 	) const;
+	bool IsAttackDodged(
+		AActor* HitActor,
+		const FPLAttackOverlapDodgeSettings& DodgeSettings
+	) const;
 	static bool IsWithinBlockAngle(
 		const AActor* DefenderActor,
 		const AActor* AttackerActor,
 		float BlockAngleDegrees
 	);
 	void ApplyBlockGameplayEffects(
+		AActor* HitActor,
+		const FHitResult& Hit
+	) const;
+	void ApplyDodgeGameplayEffects(
 		AActor* HitActor,
 		const FHitResult& Hit
 	) const;
