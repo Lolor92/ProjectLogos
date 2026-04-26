@@ -83,6 +83,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Dodge")
 	bool IsDodgingActive() const;
 
+	UFUNCTION(BlueprintPure, Category="Combat|Parry")
+	bool IsParryActive() const;
+
 	UFUNCTION(BlueprintPure, Category="Combat|Crowd Control")
 	bool IsCrowdControlActive() const;
 
@@ -145,6 +148,9 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
 	FGameplayTag DodgingTag;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Parry")
+	FGameplayTag ParryTag;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Crowd Control")
 	FGameplayTag CrowdControlTag;
 
@@ -157,6 +163,16 @@ protected:
 	// Example: GE_Trigger_DodgeSuccess.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
 	TSubclassOf<UGameplayEffect> DefenderDodgedEffectClass;
+
+	// Applied to attacker when their attack is parried.
+	// Example: GE_Trigger_AttackParried, GE_ParryStun, GE_Recoil.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Parry")
+	TSubclassOf<UGameplayEffect> AttackerParriedEffectClass;
+
+	// Applied to defender when they successfully parry.
+	// Example: GE_Trigger_ParrySuccess.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Parry")
+	TSubclassOf<UGameplayEffect> DefenderParrySuccessEffectClass;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
 	FGameplayTag SuperArmor1Tag;
@@ -192,6 +208,7 @@ private:
 		const FHitResult& Hit,
 		bool bWasBlocked,
 		bool bWasDodged,
+		bool bWasParried,
 		bool bHasSuperArmor
 	);
 	void ApplyAttackOverlapDamageGameplayEffects(
@@ -215,6 +232,7 @@ private:
 		AActor* TargetActor,
 		bool bWasBlocked,
 		bool bWasDodged,
+		bool bWasParried,
 		bool bHasSuperArmor
 	);
 	void ApplyAttackOverlapMovement(
@@ -224,6 +242,7 @@ private:
 		AActor* TargetActor,
 		bool bWasBlocked,
 		bool bWasDodged,
+		bool bWasParried,
 		bool bHasSuperArmor
 	);
 	bool IsAttackBlocked(
@@ -233,6 +252,10 @@ private:
 	bool IsAttackDodged(
 		AActor* HitActor,
 		const FPLAttackOverlapDodgeSettings& DodgeSettings
+	) const;
+	bool IsAttackParried(
+		AActor* HitActor,
+		const FPLAttackOverlapParrySettings& ParrySettings
 	) const;
 	bool HasRequiredSuperArmor(
 		AActor* HitActor,
@@ -248,6 +271,10 @@ private:
 		const FHitResult& Hit
 	) const;
 	void ApplyDodgeGameplayEffects(
+		AActor* HitActor,
+		const FHitResult& Hit
+	) const;
+	void ApplyParryGameplayEffects(
 		AActor* HitActor,
 		const FHitResult& Hit
 	) const;

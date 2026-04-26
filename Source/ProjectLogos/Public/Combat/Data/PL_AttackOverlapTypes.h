@@ -302,6 +302,19 @@ struct FPLAttackOverlapDodgeSettings
 	bool bDodgeable = false;
 };
 
+USTRUCT(BlueprintType)
+struct FPLAttackOverlapParrySettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Parry")
+	bool bParryable = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Parry",
+		meta=(EditCondition="bParryable", EditConditionHides, ClampMin="0.0", ClampMax="180.0"))
+	float ParryAngleDegrees = 70.f;
+};
+
 UENUM(BlueprintType)
 enum class EPLAttackOverlapSuperArmorLevel : uint8
 {
@@ -316,11 +329,14 @@ struct FPLAttackOverlapDefenseSettings
 {
 	GENERATED_BODY()
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block", meta=(ShowOnlyInnerProperties))
-	FPLAttackOverlapBlockSettings Block;
-
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Dodge", meta=(ShowOnlyInnerProperties))
 	FPLAttackOverlapDodgeSettings Dodge;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Parry", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapParrySettings Parry;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapBlockSettings Block;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense")
 	EPLAttackOverlapSuperArmorLevel RequiredSuperArmor = EPLAttackOverlapSuperArmorLevel::None;

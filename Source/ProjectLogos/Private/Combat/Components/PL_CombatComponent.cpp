@@ -98,6 +98,13 @@ bool UPL_CombatComponent::IsDodgingActive() const
 		&& AbilitySystemComponent->HasMatchingGameplayTag(DodgingTag);
 }
 
+bool UPL_CombatComponent::IsParryActive() const
+{
+	return AbilitySystemComponent
+		&& ParryTag.IsValid()
+		&& AbilitySystemComponent->HasMatchingGameplayTag(ParryTag);
+}
+
 bool UPL_CombatComponent::IsCrowdControlActive() const
 {
 	return AbilitySystemComponent
@@ -282,6 +289,34 @@ bool UPL_CombatComponent::IsAttackDodged(
 	return TargetASC->HasMatchingGameplayTag(DodgingTag);
 }
 
+bool UPL_CombatComponent::IsAttackParried(
+	AActor* HitActor,
+	const FPLAttackOverlapParrySettings& ParrySettings
+) const
+{
+	if (!ParrySettings.bParryable || !HitActor)
+	{
+		return false;
+	}
+
+	if (!ParryTag.IsValid())
+	{
+		return false;
+	}
+
+	const UAbilitySystemComponent* TargetASC = GetTargetAbilitySystemComponent(HitActor);
+	if (!TargetASC || !TargetASC->HasMatchingGameplayTag(ParryTag))
+	{
+		return false;
+	}
+
+	return IsWithinBlockAngle(
+		HitActor,
+		GetOwner(),
+		ParrySettings.ParryAngleDegrees
+	);
+}
+
 bool UPL_CombatComponent::HasRequiredSuperArmor(
 	AActor* HitActor,
 	const EPLAttackOverlapSuperArmorLevel RequiredLevel
@@ -354,6 +389,33 @@ void UPL_CombatComponent::ApplyDodgeGameplayEffects(
 	ApplyGameplayEffectToActor(
 		HitActor,
 		DefenderDodgedEffectClass,
+		1.f,
+		&Hit
+	);
+}
+
+void UPL_CombatComponent::ApplyParryGameplayEffects(
+	AActor* HitActor,
+	const FHitResult& Hit
+) const
+{
+	AActor* AttackerActor = GetOwner();
+
+	if (!AttackerActor || !HitActor || !AttackerActor->HasAuthority())
+	{
+		return;
+	}
+
+	ApplyGameplayEffectToActor(
+		AttackerActor,
+		AttackerParriedEffectClass,
+		1.f,
+		&Hit
+	);
+
+	ApplyGameplayEffectToActor(
+		HitActor,
+		DefenderParrySuccessEffectClass,
 		1.f,
 		&Hit
 	);
@@ -681,6 +743,11 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		Window.Settings.Defense.Dodge
 	);
 
+	const bool bWasParried = IsAttackParried(
+		HitActor,
+		Window.Settings.Defense.Parry
+	);
+
 	const bool bWasBlocked = IsAttackBlocked(
 		HitActor,
 		Window.Settings.Defense.Block
@@ -689,15 +756,6 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 	const bool bHasSuperArmor = HasRequiredSuperArmor(
 		HitActor,
 		Window.Settings.Defense.RequiredSuperArmor
-	);
-
-	ApplyAttackOverlapTransformEffects(
-		Window,
-		HitActor,
-		Hit,
-		bWasBlocked,
-		bWasDodged,
-		bHasSuperArmor
 	);
 
 	if (bWasDodged)
@@ -716,8 +774,50 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		return;
 	}
 
+	if (bWasParried)
+	{
+		// Parry is also a successful block.
+		// So apply block movement/rotation rules first.
+		ApplyAttackOverlapTransformEffects(
+			Window,
+			HitActor,
+			Hit,
+			true,
+			false,
+			false,
+			false
+		);
+
+		// Apply normal block result effects.
+		ApplyBlockGameplayEffects(HitActor, Hit);
+
+		// Then apply parry-specific result effects on top.
+		ApplyParryGameplayEffects(HitActor, Hit);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Attack overlap parried. Attacker=%s Defender=%s"),
+			*GetNameSafe(GetOwner()),
+			*GetNameSafe(HitActor)
+		);
+
+		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
+		return;
+	}
+
 	if (bWasBlocked)
 	{
+		ApplyAttackOverlapTransformEffects(
+			Window,
+			HitActor,
+			Hit,
+			true,
+			false,
+			false,
+			false
+		);
+
 		ApplyBlockGameplayEffects(HitActor, Hit);
 
 		UE_LOG(
@@ -752,6 +852,17 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
 		return;
 	}
+
+	// Clean hit.
+	ApplyAttackOverlapTransformEffects(
+		Window,
+		HitActor,
+		Hit,
+		false,
+		false,
+		false,
+		false
+	);
 
 	ApplyAttackOverlapHitStop(Window, HitActor);
 	ApplyAttackOverlapDamageGameplayEffects(Window, HitActor, Hit);
@@ -868,6 +979,7 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 	const FHitResult& Hit,
 	const bool bWasBlocked,
 	const bool bWasDodged,
+	const bool bWasParried,
 	const bool bHasSuperArmor)
 {
 	AActor* InstigatorActor = GetOwner();
@@ -889,6 +1001,7 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 		HitActor,
 		bWasBlocked,
 		bWasDodged,
+		bWasParried,
 		bHasSuperArmor
 	);
 	ApplyAttackOverlapMovement(
@@ -898,6 +1011,7 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 		HitActor,
 		bWasBlocked,
 		bWasDodged,
+		bWasParried,
 		bHasSuperArmor
 	);
 }
@@ -1006,6 +1120,7 @@ void UPL_CombatComponent::ApplyAttackOverlapMovement(
 	AActor* TargetActor,
 	const bool bWasBlocked,
 	const bool bWasDodged,
+	const bool bWasParried,
 	const bool bHasSuperArmor
 )
 {
@@ -1014,8 +1129,7 @@ void UPL_CombatComponent::ApplyAttackOverlapMovement(
 		return;
 	}
 
-	// Old project skipped movement if the hit was dodged or super armored.
-	if (bWasDodged || bHasSuperArmor)
+	if (bWasDodged || bWasParried || bHasSuperArmor)
 	{
 		return;
 	}
@@ -1114,6 +1228,7 @@ void UPL_CombatComponent::ApplyAttackOverlapRotation(
 	AActor* TargetActor,
 	const bool bWasBlocked,
 	const bool bWasDodged,
+	const bool bWasParried,
 	const bool bHasSuperArmor
 )
 {
@@ -1122,8 +1237,7 @@ void UPL_CombatComponent::ApplyAttackOverlapRotation(
 		return;
 	}
 
-	// Old project skipped rotation if the hit was dodged or super armored.
-	if (bWasDodged || bHasSuperArmor)
+	if (bWasDodged || bWasParried || bHasSuperArmor)
 	{
 		return;
 	}
