@@ -24,15 +24,25 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	{
 		GroundSpeed = 0.f;
 		bIsMoving = false;
+		bIsAccelerating = false;
+		bIsInAir = false;
+		bIsAirborne = false;
+		MovementDirectionYaw = 0.f;
 		return;
 	}
 
 	GroundSpeed = OwningBasePawn->GetGroundSpeed();
 	bIsMoving = OwningBasePawn->IsMoving();
+	bIsAccelerating = OwningBasePawn->IsAcceleratingForAnimation();
+
+	// Matches old CMC-style "IsFalling" behavior.
+	bIsInAir = OwningBasePawn->IsMoverFalling();
+
+	// Optional broader airborne flag, useful later if you add flying/launch states.
+	bIsAirborne = OwningBasePawn->IsMoverAirborne();
 
 	if (!bIsMoving)
 	{
-		// No movement, no direction to calculate.
 		MovementDirectionYaw = 0.f;
 	}
 	else
@@ -41,15 +51,13 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		const FRotator MovementRotation = Velocity.ToOrientationRotator();
 		const FRotator ActorRotation = OwningBasePawn->GetActorRotation();
 
-		// Difference between where we move and where the pawn faces.
 		MovementDirectionYaw = UKismetMathLibrary::NormalizedDeltaRotator(
-			MovementRotation, ActorRotation).Yaw;
+			MovementRotation,
+			ActorRotation
+		).Yaw;
 	}
 
-	if (OwningBasePawn)
-	{
-		OwningBasePawn->EnsureAbilityMontageVisual();
-	}
+	OwningBasePawn->EnsureAbilityMontageVisual();
 }
 
 void UPL_AnimInstance::SetAbilityAnimState(

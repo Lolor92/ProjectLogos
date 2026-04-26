@@ -21,6 +21,21 @@ public:
 	
 	UFUNCTION(BlueprintCallable, Category="Anim|Ability")
 	void SetAbilityAnimState(bool bNewAbilityRootMotionActive, bool bNewShouldBlendMontage);
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|State");
+	bool bIsBlocking = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|State");
+	bool bIsKnockdown = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|State");
+	bool bIsFlinching = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|State");
+	bool bIsFrozen = false;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Anim|State");
+	bool bIsStunned = false;
 
 protected:
 	// Pawn that owns this animation instance.
@@ -34,6 +49,18 @@ protected:
 	// True when the pawn has meaningful horizontal velocity.
 	UPROPERTY(BlueprintReadOnly, Category="Animation")
 	bool bIsMoving = false;
+
+	// True when the pawn has movement input / acceleration intent.
+	UPROPERTY(BlueprintReadOnly, Category="Animation")
+	bool bIsAccelerating = false;
+
+	// True when Mover says the pawn is falling.
+	UPROPERTY(BlueprintReadOnly, Category="Animation")
+	bool bIsInAir = false;
+
+	// True when Mover says the pawn is airborne, e.g. falling/flying.
+	UPROPERTY(BlueprintReadOnly, Category="Animation")
+	bool bIsAirborne = false;
 	
 	// Movement direction relative to pawn facing. Useful for 2D blendspaces.
 	UPROPERTY(BlueprintReadOnly, Category="Animation")

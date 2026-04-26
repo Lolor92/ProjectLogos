@@ -109,6 +109,18 @@ public:
 
 	UFUNCTION(BlueprintPure, Category="Mover")
 	bool IsMoving() const;
+
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool IsMoverFalling() const;
+
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool IsMoverAirborne() const;
+
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool HasMoverMoveInput() const;
+
+	UFUNCTION(BlueprintPure, Category="Mover")
+	bool IsAcceleratingForAnimation() const;
 	
 	UFUNCTION(BlueprintCallable, Category="Ability|Animation")
 	void SetAbilityAnimState(const FPLRepAbilityAnimState& NewState);

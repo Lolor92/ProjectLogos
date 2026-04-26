@@ -77,6 +77,13 @@ void UPL_CombatComponent::NotifyCombatTagReaction(
 	BP_OnCombatTagReaction(TriggerTag, bAdded);
 }
 
+bool UPL_CombatComponent::IsBlockingActive() const
+{
+	return AbilitySystemComponent
+		&& BlockingTag.IsValid()
+		&& AbilitySystemComponent->HasMatchingGameplayTag(BlockingTag);
+}
+
 void UPL_CombatComponent::GrantDefaultAbilities()
 {
 	if (bDefaultAbilitiesGranted || !AbilitySystemComponent)

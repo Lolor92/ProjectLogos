@@ -101,6 +101,39 @@ bool ABasePawn::IsMoving() const
 	return GetGroundSpeed() > KINDA_SMALL_NUMBER;
 }
 
+bool ABasePawn::IsMoverFalling() const
+{
+	return CharacterMoverComponent && CharacterMoverComponent->IsFalling();
+}
+
+bool ABasePawn::IsMoverAirborne() const
+{
+	return CharacterMoverComponent && CharacterMoverComponent->IsAirborne();
+}
+
+bool ABasePawn::HasMoverMoveInput() const
+{
+	return MoverPawnComponent && MoverPawnComponent->HasMoveInput();
+}
+
+bool ABasePawn::IsAcceleratingForAnimation() const
+{
+	// For the owning pawn, this means "player is giving movement input".
+	if (HasMoverMoveInput())
+	{
+		return true;
+	}
+
+	// Simulated proxies may not have the raw local input cached,
+	// so use velocity as a safe animation fallback.
+	if (GetLocalRole() == ROLE_SimulatedProxy)
+	{
+		return GetGroundSpeed() > 3.f;
+	}
+
+	return false;
+}
+
 void ABasePawn::SetAbilityAnimState(const FPLRepAbilityAnimState& NewState)
 {
 	if (AbilityAnimState == NewState)

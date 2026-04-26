@@ -98,6 +98,15 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover")
 	bool bOrientToCameraYaw = true;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover|Speed Modifiers", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float BlockingSpeedMultiplier = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover|Speed Modifiers", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float BackwardSpeedMultiplier = 0.6f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover|Speed Modifiers", meta=(ClampMin="-1.0", ClampMax="1.0"))
+	float BackwardDotThreshold = -0.5f;
+
 private:
 	void ApplyFacingSnapOnce(float Yaw) const;
 	void ApplyExternalTransformSnap(
@@ -140,6 +149,10 @@ private:
 	void FinishHitStop(uint32 Serial);
 
 	void WriteCurrentTransformToMoverSyncState() const;
+
+	float GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const;
+	bool IsBlockingMovementActive() const;
+	bool IsMovingBackward(const FVector& WorldMoveIntent) const;
 
 	UFUNCTION(Server, Reliable)
 	void ServerRequestForcedFacingYaw(float Yaw);

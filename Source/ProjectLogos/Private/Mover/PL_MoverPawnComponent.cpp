@@ -1,5 +1,6 @@
 ﻿#include "Mover/PL_MoverPawnComponent.h"
 #include "Backends/MoverBackendLiaison.h"
+#include "Combat/Components/PL_CombatComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
@@ -8,6 +9,7 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "Pawn/BasePawn.h"
 #include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogPLMoverFacing, Log, All);
@@ -513,6 +515,59 @@ void UPL_MoverPawnComponent::ClearMoveIntent()
 	CachedMoveInputIntent = FVector::ZeroVector;
 }
 
+bool UPL_MoverPawnComponent::IsBlockingMovementActive() const
+{
+	const ABasePawn* BasePawn = Cast<ABasePawn>(GetOwner());
+	if (!BasePawn)
+	{
+		return false;
+	}
+
+	const UPL_CombatComponent* CombatComponent = BasePawn->GetCombatComponent();
+	return CombatComponent && CombatComponent->IsBlockingActive();
+}
+
+bool UPL_MoverPawnComponent::IsMovingBackward(const FVector& WorldMoveIntent) const
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return false;
+	}
+
+	const FVector MoveDirection = WorldMoveIntent.GetSafeNormal2D();
+	if (MoveDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const FVector ForwardDirection = OwnerActor->GetActorForwardVector().GetSafeNormal2D();
+	if (ForwardDirection.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const float ForwardDot = FVector::DotProduct(ForwardDirection, MoveDirection);
+	return ForwardDot <= BackwardDotThreshold;
+}
+
+float UPL_MoverPawnComponent::GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const
+{
+	// Important: blocking wins first, same as the old CMC version.
+	// This prevents blocking + backward from multiplying together.
+	if (IsBlockingMovementActive())
+	{
+		return FMath::Clamp(BlockingSpeedMultiplier, 0.f, 1.f);
+	}
+
+	if (IsMovingBackward(WorldMoveIntent))
+	{
+		return FMath::Clamp(BackwardSpeedMultiplier, 0.f, 1.f);
+	}
+
+	return 1.f;
+}
+
 void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	int32 SimTimeMs,
 	FMoverInputCmdContext& InputCmdResult
@@ -532,7 +587,10 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	if (!PlayerController)
 	{
 		// NPCs or non-player pawns can still use raw world input.
-		CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, CachedMoveInputIntent);
+		const float SpeedMultiplier = GetMovementInputSpeedMultiplier(CachedMoveInputIntent);
+		const FVector ScaledMoveIntent = CachedMoveInputIntent * SpeedMultiplier;
+
+		CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, ScaledMoveIntent);
 
 		if (CachedMoveInputIntent.SizeSquared2D() > 0.01f)
 		{
@@ -555,9 +613,11 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 
 	// Convert local input into camera-relative world movement.
 	const FVector WorldMoveIntent = YawRotation.RotateVector(CachedMoveInputIntent);
+	const float SpeedMultiplier = GetMovementInputSpeedMultiplier(WorldMoveIntent);
+	const FVector ScaledWorldMoveIntent = WorldMoveIntent * SpeedMultiplier;
 
 	CharacterInputs.ControlRotation = ControlRotation;
-	CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, WorldMoveIntent);
+	CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, ScaledWorldMoveIntent);
 
 	if (WorldMoveIntent.SizeSquared2D() > 0.01f)
 	{

@@ -77,6 +77,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat")
 	ABasePawn* GetOwnerPawn() const { return OwnerPawn; }
 
+	UFUNCTION(BlueprintPure, Category="Combat|Block")
+	bool IsBlockingActive() const;
+
 	bool BeginAttackOverlapWindow(
 		const UAnimNotifyState* NotifyState,
 		USkeletalMeshComponent* MeshComp,
@@ -110,6 +113,9 @@ protected:
 	// Gameplay tag driven reactions.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions")
 	TObjectPtr<UPL_TagReactionData> TagReactionData = nullptr;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Block")
+	FGameplayTag BlockingTag;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
 	TArray<FPL_AnimBoolBinding> AnimBoolBindings;
