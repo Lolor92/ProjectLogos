@@ -9,6 +9,7 @@
 #include "Engine/World.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "GAS/Data/PL_AbilitySet.h"
+#include "GameFramework/Controller.h"
 #include "GameplayEffect.h"
 #include "Mover/PL_MoverPawnComponent.h"
 #include "Pawn/BasePawn.h"
@@ -39,8 +40,12 @@ void UPL_CombatComponent::InitializeCombat(
 		return;
 	}
 
+	ClearCrowdControlTagEvent();
+
 	OwnerPawn = InOwnerPawn;
 	AbilitySystemComponent = InAbilitySystemComponent;
+
+	BindCrowdControlTagEvent();
 
 	if (OwnerPawn->HasAuthority())
 	{
@@ -64,6 +69,8 @@ void UPL_CombatComponent::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	{
 		TagReactionRuntime->Deinitialize();
 	}
+
+	ClearCrowdControlTagEvent();
 
 	ClearDefaultAbilities();
 
@@ -91,6 +98,13 @@ bool UPL_CombatComponent::IsDodgingActive() const
 		&& AbilitySystemComponent->HasMatchingGameplayTag(DodgingTag);
 }
 
+bool UPL_CombatComponent::IsCrowdControlActive() const
+{
+	return AbilitySystemComponent
+		&& CrowdControlTag.IsValid()
+		&& AbilitySystemComponent->HasMatchingGameplayTag(CrowdControlTag);
+}
+
 EPLAttackOverlapSuperArmorLevel UPL_CombatComponent::GetCurrentSuperArmorLevel() const
 {
 	if (!AbilitySystemComponent)
@@ -115,6 +129,60 @@ EPLAttackOverlapSuperArmorLevel UPL_CombatComponent::GetCurrentSuperArmorLevel()
 	}
 
 	return EPLAttackOverlapSuperArmorLevel::None;
+}
+
+void UPL_CombatComponent::BindCrowdControlTagEvent()
+{
+	if (!AbilitySystemComponent || !CrowdControlTag.IsValid() || CrowdControlTagDelegateHandle.IsValid())
+	{
+		return;
+	}
+
+	CrowdControlTagDelegateHandle = AbilitySystemComponent
+		->RegisterGameplayTagEvent(CrowdControlTag, EGameplayTagEventType::NewOrRemoved)
+		.AddUObject(this, &ThisClass::OnCrowdControlTagChanged);
+
+	BoundCrowdControlTag = CrowdControlTag;
+}
+
+void UPL_CombatComponent::ClearCrowdControlTagEvent()
+{
+	if (AbilitySystemComponent && BoundCrowdControlTag.IsValid() && CrowdControlTagDelegateHandle.IsValid())
+	{
+		AbilitySystemComponent
+			->RegisterGameplayTagEvent(BoundCrowdControlTag, EGameplayTagEventType::NewOrRemoved)
+			.Remove(CrowdControlTagDelegateHandle);
+	}
+
+	CrowdControlTagDelegateHandle.Reset();
+	BoundCrowdControlTag = FGameplayTag();
+}
+
+void UPL_CombatComponent::OnCrowdControlTagChanged(
+	const FGameplayTag Tag,
+	const int32 NewCount)
+{
+	ABasePawn* Pawn = OwnerPawn.Get();
+	if (!Pawn)
+	{
+		return;
+	}
+
+	if (NewCount > 0)
+	{
+		if (UPL_MoverPawnComponent* MoverPawnComponent = Pawn->GetMoverPawnComponent())
+		{
+			MoverPawnComponent->ClearMoveIntent();
+		}
+	}
+
+	if (Pawn->IsLocallyControlled())
+	{
+		if (AController* Controller = Pawn->GetController())
+		{
+			Controller->SetIgnoreMoveInput(NewCount > 0);
+		}
+	}
 }
 
 bool UPL_CombatComponent::HasSuperArmorAtOrAbove(

@@ -552,6 +552,19 @@ bool UPL_MoverPawnComponent::IsBlockingMovementActive() const
 	return CombatComponent && CombatComponent->IsBlockingActive();
 }
 
+bool UPL_MoverPawnComponent::IsMovementSuppressedByCrowdControl() const
+{
+	const ABasePawn* BasePawn = Cast<ABasePawn>(GetOwner());
+	if (!BasePawn)
+	{
+		return false;
+	}
+
+	const UPL_CombatComponent* CombatComponent = BasePawn->GetCombatComponent();
+
+	return CombatComponent && CombatComponent->IsCrowdControlActive();
+}
+
 bool UPL_MoverPawnComponent::IsMovingBackward(const FVector& WorldMoveIntent) const
 {
 	const AActor* OwnerActor = GetOwner();
@@ -606,6 +619,16 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	
 	// Reset every frame so old facing data does not linger.
 	CharacterInputs.OrientationIntent = FVector::ZeroVector;
+
+	if (IsMovementSuppressedByCrowdControl())
+	{
+		CharacterInputs.SetMoveInput(
+			EMoveInputType::DirectionalIntent,
+			FVector::ZeroVector
+		);
+
+		return;
+	}
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	const APlayerController* PlayerController =

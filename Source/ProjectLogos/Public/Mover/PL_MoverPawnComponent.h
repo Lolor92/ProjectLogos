@@ -155,6 +155,7 @@ private:
 	void CacheBaseMoverMaxSpeed();
 
 	float GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const;
+	bool IsMovementSuppressedByCrowdControl() const;
 	bool IsBlockingMovementActive() const;
 	bool IsMovingBackward(const FVector& WorldMoveIntent) const;
 

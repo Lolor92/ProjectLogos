@@ -83,6 +83,9 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Dodge")
 	bool IsDodgingActive() const;
 
+	UFUNCTION(BlueprintPure, Category="Combat|Crowd Control")
+	bool IsCrowdControlActive() const;
+
 	UFUNCTION(BlueprintPure, Category="Combat|Super Armor")
 	bool HasSuperArmorAtOrAbove(EPLAttackOverlapSuperArmorLevel RequiredLevel) const;
 
@@ -90,6 +93,7 @@ public:
 	EPLAttackOverlapSuperArmorLevel GetCurrentSuperArmorLevel() const;
 
 	const FGameplayTag& GetBlockingTag() const { return BlockingTag; }
+	const FGameplayTag& GetCrowdControlTag() const { return CrowdControlTag; }
 
 	bool BeginAttackOverlapWindow(
 		const UAnimNotifyState* NotifyState,
@@ -140,6 +144,9 @@ protected:
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
 	FGameplayTag DodgingTag;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Crowd Control")
+	FGameplayTag CrowdControlTag;
 
 	// Applied to attacker when their hit is dodged.
 	// Example: GE_Trigger_AttackDodged, GE_WhiffRecovery, etc.
@@ -277,6 +284,9 @@ private:
 		AActor* Actor,
 		const FPLAttackOverlapHitStopSettings& HitStopSettings
 	) const;
+	void BindCrowdControlTagEvent();
+	void ClearCrowdControlTagEvent();
+	void OnCrowdControlTagChanged(FGameplayTag Tag, int32 NewCount);
 	UAbilitySystemComponent* GetTargetAbilitySystemComponent(AActor* TargetActor) const;
 	void DrawAttackOverlapDebug(const FPLActiveAttackOverlapWindow& Window, const FTransform& ShapeTransform, bool bHit) const;
 
@@ -301,6 +311,9 @@ private:
 
 	UPROPERTY(Transient)
 	FPLAbilitySet_GrantedHandles GrantedHandles;
+
+	FGameplayTag BoundCrowdControlTag;
+	FDelegateHandle CrowdControlTagDelegateHandle;
 
 	bool bDefaultAbilitiesGranted = false;
 };
