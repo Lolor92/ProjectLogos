@@ -107,6 +107,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover|Speed Modifiers", meta=(ClampMin="-1.0", ClampMax="1.0"))
 	float BackwardDotThreshold = -0.5f;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category="Mover|Speed Modifiers", meta=(ClampMin="0.0"))
+	float BaseMovementSpeed = 400.f;
+
 private:
 	void ApplyFacingSnapOnce(float Yaw) const;
 	void ApplyExternalTransformSnap(
@@ -149,9 +152,7 @@ private:
 	void FinishHitStop(uint32 Serial);
 
 	void WriteCurrentTransformToMoverSyncState() const;
-
 	void CacheBaseMoverMaxSpeed();
-	void ApplyMoverMaxSpeedMultiplier(float SpeedMultiplier);
 
 	float GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const;
 	bool IsBlockingMovementActive() const;

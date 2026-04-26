@@ -527,8 +527,8 @@ void UPL_MoverPawnComponent::CacheBaseMoverMaxSpeed()
 		return;
 	}
 
-	UCommonLegacyMovementSettings* CommonSettings =
-		CharacterMoverComponent->FindSharedSettings_Mutable<UCommonLegacyMovementSettings>();
+	const UCommonLegacyMovementSettings* CommonSettings =
+		CharacterMoverComponent->FindSharedSettings<UCommonLegacyMovementSettings>();
 
 	if (!CommonSettings)
 	{
@@ -538,30 +538,10 @@ void UPL_MoverPawnComponent::CacheBaseMoverMaxSpeed()
 	}
 
 	BaseMoverMaxSpeed = CommonSettings->MaxSpeed;
-}
 
-void UPL_MoverPawnComponent::ApplyMoverMaxSpeedMultiplier(const float SpeedMultiplier)
-{
-	if (!CharacterMoverComponent)
-	{
-		return;
-	}
-
-	UCommonLegacyMovementSettings* CommonSettings =
-		CharacterMoverComponent->FindSharedSettings_Mutable<UCommonLegacyMovementSettings>();
-
-	if (!CommonSettings)
-	{
-		return;
-	}
-
-	if (BaseMoverMaxSpeed <= 0.f)
-	{
-		BaseMoverMaxSpeed = CommonSettings->MaxSpeed;
-	}
-
-	const float ClampedMultiplier = FMath::Clamp(SpeedMultiplier, 0.f, 1.f);
-	CommonSettings->MaxSpeed = BaseMoverMaxSpeed * ClampedMultiplier;
+	UE_LOG(LogTemp, Warning, TEXT("Cached BaseMoverMaxSpeed=%.2f on %s"),
+		BaseMoverMaxSpeed,
+		*GetNameSafe(GetOwner()));
 }
 
 bool UPL_MoverPawnComponent::IsBlockingMovementActive() const
@@ -662,10 +642,55 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	// Convert local input into camera-relative world movement.
 	const FVector WorldMoveIntent = YawRotation.RotateVector(CachedMoveInputIntent);
 	const float SpeedMultiplier = GetMovementInputSpeedMultiplier(WorldMoveIntent);
-	ApplyMoverMaxSpeedMultiplier(SpeedMultiplier);
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("MoverSpeed: Blocking=%d Mult=%.2f Input=%s InputType=%s"),
+		IsBlockingMovementActive(),
+		SpeedMultiplier,
+		*WorldMoveIntent.ToString(),
+		SpeedMultiplier < 0.999f ? TEXT("Velocity") : TEXT("DirectionalIntent")
+	);
 
 	CharacterInputs.ControlRotation = ControlRotation;
-	CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, WorldMoveIntent);
+
+	if (WorldMoveIntent.SizeSquared2D() > 0.01f && SpeedMultiplier < 0.999f)
+	{
+		if (BaseMoverMaxSpeed <= 0.f)
+		{
+			CacheBaseMoverMaxSpeed();
+		}
+
+		const FVector MoveDirection = WorldMoveIntent.GetSafeNormal2D();
+		const float InputAmount = FMath::Clamp(WorldMoveIntent.Size2D(), 0.f, 1.f);
+		const float DesiredSpeed = BaseMoverMaxSpeed * SpeedMultiplier * InputAmount;
+		const FVector DesiredVelocity = MoveDirection * DesiredSpeed;
+
+		CharacterInputs.SetMoveInput(
+			EMoveInputType::Velocity,
+			DesiredVelocity
+		);
+
+		UE_LOG(
+			LogTemp,
+			Warning,
+			TEXT("MoverSpeed: Blocking=%d Mult=%.2f BaseSpeed=%.2f DesiredSpeed=%.2f ActualSpeed=%.2f Input=%s Velocity=%s"),
+			IsBlockingMovementActive(),
+			SpeedMultiplier,
+			BaseMoverMaxSpeed,
+			DesiredSpeed,
+			CharacterMoverComponent ? CharacterMoverComponent->GetVelocity().Size2D() : 0.f,
+			*WorldMoveIntent.ToString(),
+			*DesiredVelocity.ToString()
+		);
+	}
+	else
+	{
+		CharacterInputs.SetMoveInput(
+			EMoveInputType::DirectionalIntent,
+			WorldMoveIntent
+		);
+	}
 
 	if (WorldMoveIntent.SizeSquared2D() > 0.01f)
 	{
