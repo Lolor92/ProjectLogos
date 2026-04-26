@@ -415,6 +415,8 @@ void UPL_InputComponent::HandleAbilityInputPressed(FGameplayTag InputTag)
 			AbilitySpec.Handle,
 			PredictionKey
 		);
+
+		return;
 	}
 }
 

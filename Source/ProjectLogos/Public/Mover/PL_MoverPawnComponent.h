@@ -62,6 +62,9 @@ protected:
 	// Main visual component. Usually the skeletal mesh.
 	UPROPERTY(Transient)
 	TObjectPtr<USceneComponent> PrimaryVisualComponent = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UActorComponent> BackendLiaisonComponent = nullptr;
 	
 	// If true, player-controlled pawns face camera yaw while moving.
 	// If false, pawns face their movement direction.

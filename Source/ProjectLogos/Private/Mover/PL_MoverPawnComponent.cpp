@@ -8,6 +8,8 @@
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
 
+DEFINE_LOG_CATEGORY_STATIC(LogPLMoverFacing, Log, All);
+
 UPL_MoverPawnComponent::UPL_MoverPawnComponent()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -56,6 +58,10 @@ void UPL_MoverPawnComponent::ResolveOwnerComponents()
 
 	// Usually the skeletal mesh is the visual component.
 	PrimaryVisualComponent = OwnerActor->FindComponentByClass<USkeletalMeshComponent>();
+
+	BackendLiaisonComponent = OwnerActor->FindComponentByInterface(
+		UMoverBackendLiaisonInterface::StaticClass()
+	);
 }
 
 void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
@@ -67,6 +73,22 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 {
 	Yaw = FRotator::NormalizeAxis(Yaw);
+
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return;
+	}
+
+	constexpr float MinFacingSnapDeltaDegrees = 1.0f;
+
+	const float CurrentYaw = OwnerActor->GetActorRotation().Yaw;
+	const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentYaw, Yaw));
+
+	if (DeltaYaw <= MinFacingSnapDeltaDegrees)
+	{
+		return;
+	}
 
 	const FRotator YawRotation(0.f, Yaw, 0.f);
 
@@ -84,16 +106,26 @@ void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 	}
 }
 
-void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Yaw)
+void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float ClientYaw)
 {
-	Yaw = FRotator::NormalizeAxis(Yaw);
+	float DesiredYaw = FRotator::NormalizeAxis(ClientYaw);
 
-	const FRotator YawRotation(0.f, Yaw, 0.f);
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	const AController* Controller = OwnerPawn ? OwnerPawn->GetController() : nullptr;
+
+	if (Controller)
+	{
+		DesiredYaw = Controller->GetControlRotation().Yaw;
+	}
+
+	DesiredYaw = FRotator::NormalizeAxis(DesiredYaw);
+
+	const FRotator YawRotation(0.f, DesiredYaw, 0.f);
 
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
 
-	ApplyFacingSnapOnce(Yaw);
+	ApplyFacingSnapOnce(DesiredYaw);
 }
 
 void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
@@ -102,12 +134,6 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 	if (!OwnerActor)
 	{
 		return;
-	}
-
-	if (CharacterMoverComponent)
-	{
-		CharacterMoverComponent->bAcceptExternalMovement = true;
-		CharacterMoverComponent->bWarnOnExternalMovement = false;
 	}
 
 	FRotator NewRotation = OwnerActor->GetActorRotation();
@@ -120,8 +146,8 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 	WriteCurrentTransformToMoverSyncState();
 
 	UE_LOG(
-		LogTemp,
-		Warning,
+		LogPLMoverFacing,
+		VeryVerbose,
 		TEXT("Facing snap applied. Actor=%s DesiredYaw=%.2f ActorYaw=%.2f Authority=%d Local=%d"),
 		*GetNameSafe(OwnerActor),
 		Yaw,
@@ -144,15 +170,13 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 		return;
 	}
 
-	UActorComponent* LiaisonActorComponent =
-		OwnerActor->FindComponentByInterface(UMoverBackendLiaisonInterface::StaticClass());
 	IMoverBackendLiaisonInterface* LiaisonComponent =
-		Cast<IMoverBackendLiaisonInterface>(LiaisonActorComponent);
+		Cast<IMoverBackendLiaisonInterface>(BackendLiaisonComponent.Get());
 
 	if (!LiaisonComponent)
 	{
 		UE_LOG(
-			LogTemp,
+			LogPLMoverFacing,
 			Warning,
 			TEXT("Facing snap could not update Mover sync state. No backend liaison found on %s."),
 			*GetNameSafe(OwnerActor)
@@ -164,7 +188,7 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 	if (!LiaisonComponent->ReadPendingSyncState(PendingSyncState))
 	{
 		UE_LOG(
-			LogTemp,
+			LogPLMoverFacing,
 			Warning,
 			TEXT("Facing snap could not read pending Mover sync state. Actor=%s"),
 			*GetNameSafe(OwnerActor)
@@ -178,7 +202,7 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 	if (!DefaultSyncState)
 	{
 		UE_LOG(
-			LogTemp,
+			LogPLMoverFacing,
 			Warning,
 			TEXT("Facing snap could not find FMoverDefaultSyncState. Actor=%s"),
 			*GetNameSafe(OwnerActor)
@@ -198,8 +222,8 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 	LiaisonComponent->WritePendingSyncState(PendingSyncState);
 
 	UE_LOG(
-		LogTemp,
-		Warning,
+		LogPLMoverFacing,
+		VeryVerbose,
 		TEXT("Facing snap wrote Mover sync state. Actor=%s SyncYaw=%.2f"),
 		*GetNameSafe(OwnerActor),
 		UpdatedComponent->GetComponentRotation().Yaw
