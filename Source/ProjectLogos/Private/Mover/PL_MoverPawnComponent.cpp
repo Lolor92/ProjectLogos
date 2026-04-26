@@ -58,10 +58,6 @@ void UPL_MoverPawnComponent::ResolveOwnerComponents()
 
 	// Usually the skeletal mesh is the visual component.
 	PrimaryVisualComponent = OwnerActor->FindComponentByClass<USkeletalMeshComponent>();
-
-	BackendLiaisonComponent = OwnerActor->FindComponentByInterface(
-		UMoverBackendLiaisonInterface::StaticClass()
-	);
 }
 
 void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
@@ -73,22 +69,6 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 {
 	Yaw = FRotator::NormalizeAxis(Yaw);
-
-	const AActor* OwnerActor = GetOwner();
-	if (!OwnerActor)
-	{
-		return;
-	}
-
-	constexpr float MinFacingSnapDeltaDegrees = 1.0f;
-
-	const float CurrentYaw = OwnerActor->GetActorRotation().Yaw;
-	const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(CurrentYaw, Yaw));
-
-	if (DeltaYaw <= MinFacingSnapDeltaDegrees)
-	{
-		return;
-	}
 
 	const FRotator YawRotation(0.f, Yaw, 0.f);
 
@@ -106,26 +86,16 @@ void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 	}
 }
 
-void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float ClientYaw)
+void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Yaw)
 {
-	float DesiredYaw = FRotator::NormalizeAxis(ClientYaw);
+	Yaw = FRotator::NormalizeAxis(Yaw);
 
-	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
-	const AController* Controller = OwnerPawn ? OwnerPawn->GetController() : nullptr;
-
-	if (Controller)
-	{
-		DesiredYaw = Controller->GetControlRotation().Yaw;
-	}
-
-	DesiredYaw = FRotator::NormalizeAxis(DesiredYaw);
-
-	const FRotator YawRotation(0.f, DesiredYaw, 0.f);
+	const FRotator YawRotation(0.f, Yaw, 0.f);
 
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
 
-	ApplyFacingSnapOnce(DesiredYaw);
+	ApplyFacingSnapOnce(Yaw);
 }
 
 void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
@@ -170,8 +140,10 @@ void UPL_MoverPawnComponent::WriteCurrentTransformToMoverSyncState() const
 		return;
 	}
 
+	UActorComponent* LiaisonActorComponent =
+		OwnerActor->FindComponentByInterface(UMoverBackendLiaisonInterface::StaticClass());
 	IMoverBackendLiaisonInterface* LiaisonComponent =
-		Cast<IMoverBackendLiaisonInterface>(BackendLiaisonComponent.Get());
+		Cast<IMoverBackendLiaisonInterface>(LiaisonActorComponent);
 
 	if (!LiaisonComponent)
 	{
