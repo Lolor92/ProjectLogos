@@ -56,6 +56,13 @@ class PROJECTLOGOS_API UPL_GameplayAbility : public UGameplayAbility
 public:
 	UPL_GameplayAbility();
 
+	virtual void ActivateAbility(
+		const FGameplayAbilitySpecHandle Handle,
+		const FGameplayAbilityActorInfo* ActorInfo,
+		const FGameplayAbilityActivationInfo ActivationInfo,
+		const FGameplayEventData* TriggerEventData
+	) override;
+
 	virtual bool CanActivateAbility(
 		const FGameplayAbilitySpecHandle Handle,
 		const FGameplayAbilityActorInfo* ActorInfo,
@@ -104,6 +111,8 @@ public:
 	void CancelAvatarHitStop() const;
 
 protected:
+	void CancelAvatarHitStopFromActorInfo(const FGameplayAbilityActorInfo* ActorInfo) const;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Rotation")
 	bool bRotateToControllerYawOnActivate = false;
 

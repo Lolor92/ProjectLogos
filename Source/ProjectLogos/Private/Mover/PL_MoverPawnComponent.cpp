@@ -221,6 +221,18 @@ void UPL_MoverPawnComponent::ApplyHitStopLocal(
 	);
 }
 
+bool UPL_MoverPawnComponent::IsHitStopActive() const
+{
+	const UWorld* World = GetWorld();
+
+	const bool bTimerActive = World
+		&& World->GetTimerManager().IsTimerActive(HitStopTimerHandle);
+
+	return bTimerActive
+		|| HitStopRootMotionTimeScale < 1.f
+		|| bHasSavedGlobalAnimRateScale;
+}
+
 void UPL_MoverPawnComponent::CancelHitStop()
 {
 	UWorld* World = GetWorld();
@@ -251,6 +263,30 @@ void UPL_MoverPawnComponent::CancelHitStop()
 
 	bHasSavedGlobalAnimRateScale = false;
 	SavedGlobalAnimRateScale = 1.f;
+}
+
+void UPL_MoverPawnComponent::CancelHitStopFromAbilityStart()
+{
+	if (!IsHitStopActive())
+	{
+		return;
+	}
+
+	const AActor* OwnerActor = GetOwner();
+
+	if (OwnerActor && OwnerActor->HasAuthority())
+	{
+		MulticastCancelHitStop();
+		return;
+	}
+
+	// Local predicted abilities can cancel immediately on the owning client.
+	CancelHitStop();
+}
+
+void UPL_MoverPawnComponent::MulticastCancelHitStop_Implementation()
+{
+	CancelHitStop();
 }
 
 void UPL_MoverPawnComponent::FinishHitStop(const uint32 Serial)

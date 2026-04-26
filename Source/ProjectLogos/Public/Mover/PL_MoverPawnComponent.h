@@ -43,6 +43,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Mover|Hit Stop")
 	void CancelHitStop();
 
+	UFUNCTION(BlueprintCallable, Category="Mover|Hit Stop")
+	void CancelHitStopFromAbilityStart();
+
+	bool IsHitStopActive() const;
+
 	// Store the movement direction requested by input code.
 	UFUNCTION(BlueprintCallable, Category="Mover")
 	void RequestMoveIntent(const FVector& MoveIntent);
@@ -121,6 +126,9 @@ private:
 		bool bAffectAnimation,
 		bool bAffectMoverRootMotion
 	);
+
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastCancelHitStop();
 
 	void ApplyHitStopLocal(
 		float Duration,

@@ -17,6 +17,22 @@ UPL_GameplayAbility::UPL_GameplayAbility()
 	bRetriggerInstancedAbility = true;
 }
 
+void UPL_GameplayAbility::ActivateAbility(
+	const FGameplayAbilitySpecHandle Handle,
+	const FGameplayAbilityActorInfo* ActorInfo,
+	const FGameplayAbilityActivationInfo ActivationInfo,
+	const FGameplayEventData* TriggerEventData)
+{
+	CancelAvatarHitStopFromActorInfo(ActorInfo);
+
+	Super::ActivateAbility(
+		Handle,
+		ActorInfo,
+		ActivationInfo,
+		TriggerEventData
+	);
+}
+
 bool UPL_GameplayAbility::CanActivateAbility(
 	const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo,
@@ -45,16 +61,31 @@ void UPL_GameplayAbility::CommitExecute(
 
 void UPL_GameplayAbility::CancelAvatarHitStop() const
 {
-	if (const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo())
+	CancelAvatarHitStopFromActorInfo(GetCurrentActorInfo());
+}
+
+void UPL_GameplayAbility::CancelAvatarHitStopFromActorInfo(
+	const FGameplayAbilityActorInfo* ActorInfo
+) const
+{
+	if (!ActorInfo)
 	{
-		if (ABasePawn* BasePawn = Cast<ABasePawn>(Info->AvatarActor.Get()))
-		{
-			if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
-			{
-				MoverPawnComponent->CancelHitStop();
-			}
-		}
+		return;
 	}
+
+	ABasePawn* BasePawn = Cast<ABasePawn>(ActorInfo->AvatarActor.Get());
+	if (!BasePawn)
+	{
+		return;
+	}
+
+	UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent();
+	if (!MoverPawnComponent)
+	{
+		return;
+	}
+
+	MoverPawnComponent->CancelHitStopFromAbilityStart();
 }
 
 bool UPL_GameplayAbility::CanUseAbility(const FGameplayAbilityActorInfo* ActorInfo) const

@@ -264,10 +264,6 @@ struct FPLAttackOverlapHitStopSettings
 		meta=(EditCondition="bEnableHitStop", EditConditionHides))
 	bool bAffectMoverRootMotion = true;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
-		meta=(EditCondition="bEnableHitStop", EditConditionHides))
-	bool bCancelWhenNewAbilityStarts = true;
-
 	bool IsEnabled() const
 	{
 		return bEnableHitStop && Duration > 0.f && TimeScale < 1.f;
