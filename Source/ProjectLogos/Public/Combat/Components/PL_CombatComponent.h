@@ -83,6 +83,12 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Dodge")
 	bool IsDodgingActive() const;
 
+	UFUNCTION(BlueprintPure, Category="Combat|Super Armor")
+	bool HasSuperArmorAtOrAbove(EPLAttackOverlapSuperArmorLevel RequiredLevel) const;
+
+	UFUNCTION(BlueprintPure, Category="Combat|Super Armor")
+	EPLAttackOverlapSuperArmorLevel GetCurrentSuperArmorLevel() const;
+
 	const FGameplayTag& GetBlockingTag() const { return BlockingTag; }
 
 	bool BeginAttackOverlapWindow(
@@ -145,6 +151,25 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Dodge")
 	TSubclassOf<UGameplayEffect> DefenderDodgedEffectClass;
 
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
+	FGameplayTag SuperArmor1Tag;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
+	FGameplayTag SuperArmor2Tag;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
+	FGameplayTag SuperArmor3Tag;
+
+	// Applied to attacker when their attack hits super armor.
+	// Example: GE_Trigger_AttackSuperArmored.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
+	TSubclassOf<UGameplayEffect> AttackerSuperArmoredEffectClass;
+
+	// Applied to defender when their super armor absorbs the hit.
+	// Example: GE_Trigger_SuperArmorSuccess.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Super Armor")
+	TSubclassOf<UGameplayEffect> DefenderSuperArmoredEffectClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
 	TArray<FPL_AnimBoolBinding> AnimBoolBindings;
 
@@ -158,13 +183,20 @@ private:
 		const FPLActiveAttackOverlapWindow& Window,
 		AActor* HitActor,
 		const FHitResult& Hit,
-		bool bWasBlocked
+		bool bWasBlocked,
+		bool bWasDodged,
+		bool bHasSuperArmor
 	);
-	void ApplyAttackOverlapGameplayEffects(
+	void ApplyAttackOverlapDamageGameplayEffects(
 		const FPLActiveAttackOverlapWindow& Window,
 		AActor* HitActor,
 		const FHitResult& Hit
-	);
+	) const;
+	void ApplyAttackOverlapReactionGameplayEffects(
+		const FPLActiveAttackOverlapWindow& Window,
+		AActor* HitActor,
+		const FHitResult& Hit
+	) const;
 	void ApplyAttackOverlapHitStop(
 		FPLActiveAttackOverlapWindow& Window,
 		AActor* HitActor
@@ -174,14 +206,18 @@ private:
 		const FPLAttackOverlapBlockSettings& BlockSettings,
 		AActor* InstigatorActor,
 		AActor* TargetActor,
-		bool bWasBlocked
+		bool bWasBlocked,
+		bool bWasDodged,
+		bool bHasSuperArmor
 	);
 	void ApplyAttackOverlapMovement(
 		const FPLAttackOverlapMovementSettings& MovementSettings,
 		const FPLAttackOverlapBlockSettings& BlockSettings,
 		AActor* InstigatorActor,
 		AActor* TargetActor,
-		bool bWasBlocked
+		bool bWasBlocked,
+		bool bWasDodged,
+		bool bHasSuperArmor
 	);
 	bool IsAttackBlocked(
 		AActor* HitActor,
@@ -190,6 +226,10 @@ private:
 	bool IsAttackDodged(
 		AActor* HitActor,
 		const FPLAttackOverlapDodgeSettings& DodgeSettings
+	) const;
+	bool HasRequiredSuperArmor(
+		AActor* HitActor,
+		EPLAttackOverlapSuperArmorLevel RequiredLevel
 	) const;
 	static bool IsWithinBlockAngle(
 		const AActor* DefenderActor,
@@ -201,6 +241,10 @@ private:
 		const FHitResult& Hit
 	) const;
 	void ApplyDodgeGameplayEffects(
+		AActor* HitActor,
+		const FHitResult& Hit
+	) const;
+	void ApplySuperArmorGameplayEffects(
 		AActor* HitActor,
 		const FHitResult& Hit
 	) const;

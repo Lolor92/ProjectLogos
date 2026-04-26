@@ -302,6 +302,15 @@ struct FPLAttackOverlapDodgeSettings
 	bool bDodgeable = false;
 };
 
+UENUM(BlueprintType)
+enum class EPLAttackOverlapSuperArmorLevel : uint8
+{
+	None UMETA(DisplayName="None"),
+	SuperArmor1 UMETA(DisplayName="Super Armor 1"),
+	SuperArmor2 UMETA(DisplayName="Super Armor 2"),
+	SuperArmor3 UMETA(DisplayName="Super Armor 3")
+};
+
 USTRUCT(BlueprintType)
 struct FPLAttackOverlapDefenseSettings
 {
@@ -312,6 +321,9 @@ struct FPLAttackOverlapDefenseSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Dodge", meta=(ShowOnlyInnerProperties))
 	FPLAttackOverlapDodgeSettings Dodge;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense")
+	EPLAttackOverlapSuperArmorLevel RequiredSuperArmor = EPLAttackOverlapSuperArmorLevel::None;
 };
 
 USTRUCT(BlueprintType)
@@ -348,7 +360,17 @@ struct FPLAttackOverlapWindowSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense", meta=(ShowOnlyInnerProperties))
 	FPLAttackOverlapDefenseSettings Defense;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Effects", meta=(TitleProperty="GameplayEffectClass"))
+	// Damage/status effects that should still apply when the hit is absorbed by super armor.
+	// Example: GE_Damage, GE_Bleed, GE_Burn.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Effects|Damage", meta=(TitleProperty="GameplayEffectClass"))
+	TArray<FPLAttackOverlapGameplayEffect> DamageGameplayEffectsToApply;
+
+	// Reaction/interrupt effects that should only apply on a clean hit.
+	// Example: GE_Trigger_Stagger, GE_Trigger_Knockback, GE_Trigger_HitReaction.
+	//
+	// Keep this variable name to preserve existing notify data.
+	// Existing assets that used GameplayEffectsToApply will now behave as reaction effects.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Effects|Reaction", meta=(TitleProperty="GameplayEffectClass"))
 	TArray<FPLAttackOverlapGameplayEffect> GameplayEffectsToApply;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Debug", meta=(ShowOnlyInnerProperties))

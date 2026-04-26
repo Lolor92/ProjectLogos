@@ -91,6 +91,45 @@ bool UPL_CombatComponent::IsDodgingActive() const
 		&& AbilitySystemComponent->HasMatchingGameplayTag(DodgingTag);
 }
 
+EPLAttackOverlapSuperArmorLevel UPL_CombatComponent::GetCurrentSuperArmorLevel() const
+{
+	if (!AbilitySystemComponent)
+	{
+		return EPLAttackOverlapSuperArmorLevel::None;
+	}
+
+	// Highest level wins.
+	if (SuperArmor3Tag.IsValid() && AbilitySystemComponent->HasMatchingGameplayTag(SuperArmor3Tag))
+	{
+		return EPLAttackOverlapSuperArmorLevel::SuperArmor3;
+	}
+
+	if (SuperArmor2Tag.IsValid() && AbilitySystemComponent->HasMatchingGameplayTag(SuperArmor2Tag))
+	{
+		return EPLAttackOverlapSuperArmorLevel::SuperArmor2;
+	}
+
+	if (SuperArmor1Tag.IsValid() && AbilitySystemComponent->HasMatchingGameplayTag(SuperArmor1Tag))
+	{
+		return EPLAttackOverlapSuperArmorLevel::SuperArmor1;
+	}
+
+	return EPLAttackOverlapSuperArmorLevel::None;
+}
+
+bool UPL_CombatComponent::HasSuperArmorAtOrAbove(
+	const EPLAttackOverlapSuperArmorLevel RequiredLevel) const
+{
+	if (RequiredLevel == EPLAttackOverlapSuperArmorLevel::None)
+	{
+		return false;
+	}
+
+	const EPLAttackOverlapSuperArmorLevel CurrentLevel = GetCurrentSuperArmorLevel();
+
+	return static_cast<uint8>(CurrentLevel) >= static_cast<uint8>(RequiredLevel);
+}
+
 bool UPL_CombatComponent::IsWithinBlockAngle(
 	const AActor* DefenderActor,
 	const AActor* AttackerActor,
@@ -175,6 +214,31 @@ bool UPL_CombatComponent::IsAttackDodged(
 	return TargetASC->HasMatchingGameplayTag(DodgingTag);
 }
 
+bool UPL_CombatComponent::HasRequiredSuperArmor(
+	AActor* HitActor,
+	const EPLAttackOverlapSuperArmorLevel RequiredLevel
+) const
+{
+	if (RequiredLevel == EPLAttackOverlapSuperArmorLevel::None || !HitActor)
+	{
+		return false;
+	}
+
+	UPL_CombatComponent* TargetCombatComponent = nullptr;
+
+	if (ABasePawn* BasePawn = Cast<ABasePawn>(HitActor))
+	{
+		TargetCombatComponent = BasePawn->GetCombatComponent();
+	}
+	else
+	{
+		TargetCombatComponent = HitActor->FindComponentByClass<UPL_CombatComponent>();
+	}
+
+	return TargetCombatComponent
+		&& TargetCombatComponent->HasSuperArmorAtOrAbove(RequiredLevel);
+}
+
 void UPL_CombatComponent::ApplyBlockGameplayEffects(
 	AActor* HitActor,
 	const FHitResult& Hit
@@ -222,6 +286,33 @@ void UPL_CombatComponent::ApplyDodgeGameplayEffects(
 	ApplyGameplayEffectToActor(
 		HitActor,
 		DefenderDodgedEffectClass,
+		1.f,
+		&Hit
+	);
+}
+
+void UPL_CombatComponent::ApplySuperArmorGameplayEffects(
+	AActor* HitActor,
+	const FHitResult& Hit
+) const
+{
+	AActor* AttackerActor = GetOwner();
+
+	if (!AttackerActor || !HitActor || !AttackerActor->HasAuthority())
+	{
+		return;
+	}
+
+	ApplyGameplayEffectToActor(
+		AttackerActor,
+		AttackerSuperArmoredEffectClass,
+		1.f,
+		&Hit
+	);
+
+	ApplyGameplayEffectToActor(
+		HitActor,
+		DefenderSuperArmoredEffectClass,
 		1.f,
 		&Hit
 	);
@@ -522,6 +613,25 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		Window.Settings.Defense.Dodge
 	);
 
+	const bool bWasBlocked = IsAttackBlocked(
+		HitActor,
+		Window.Settings.Defense.Block
+	);
+
+	const bool bHasSuperArmor = HasRequiredSuperArmor(
+		HitActor,
+		Window.Settings.Defense.RequiredSuperArmor
+	);
+
+	ApplyAttackOverlapTransformEffects(
+		Window,
+		HitActor,
+		Hit,
+		bWasBlocked,
+		bWasDodged,
+		bHasSuperArmor
+	);
+
 	if (bWasDodged)
 	{
 		ApplyDodgeGameplayEffects(HitActor, Hit);
@@ -537,13 +647,6 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
 		return;
 	}
-
-	const bool bWasBlocked = IsAttackBlocked(
-		HitActor,
-		Window.Settings.Defense.Block
-	);
-
-	ApplyAttackOverlapTransformEffects(Window, HitActor, Hit, bWasBlocked);
 
 	if (bWasBlocked)
 	{
@@ -561,8 +664,30 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		return;
 	}
 
+	if (bHasSuperArmor)
+	{
+		// Super armor still takes damage/status effects.
+		ApplyAttackOverlapDamageGameplayEffects(Window, HitActor, Hit);
+
+		// But it skips stagger/knockback/reaction effects.
+		ApplySuperArmorGameplayEffects(HitActor, Hit);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Attack overlap super armored. Attacker=%s Defender=%s Required=%d"),
+			*GetNameSafe(GetOwner()),
+			*GetNameSafe(HitActor),
+			static_cast<int32>(Window.Settings.Defense.RequiredSuperArmor)
+		);
+
+		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
+		return;
+	}
+
 	ApplyAttackOverlapHitStop(Window, HitActor);
-	ApplyAttackOverlapGameplayEffects(Window, HitActor, Hit);
+	ApplyAttackOverlapDamageGameplayEffects(Window, HitActor, Hit);
+	ApplyAttackOverlapReactionGameplayEffects(Window, HitActor, Hit);
 
 	BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
 }
@@ -673,7 +798,9 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 	const FPLActiveAttackOverlapWindow& Window,
 	AActor* HitActor,
 	const FHitResult& Hit,
-	const bool bWasBlocked)
+	const bool bWasBlocked,
+	const bool bWasDodged,
+	const bool bHasSuperArmor)
 {
 	AActor* InstigatorActor = GetOwner();
 	if (!InstigatorActor || !HitActor)
@@ -692,14 +819,18 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 		Window.Settings.Defense.Block,
 		InstigatorActor,
 		HitActor,
-		bWasBlocked
+		bWasBlocked,
+		bWasDodged,
+		bHasSuperArmor
 	);
 	ApplyAttackOverlapMovement(
 		Window.Settings.Movement,
 		Window.Settings.Defense.Block,
 		InstigatorActor,
 		HitActor,
-		bWasBlocked
+		bWasBlocked,
+		bWasDodged,
+		bHasSuperArmor
 	);
 }
 
@@ -805,10 +936,18 @@ void UPL_CombatComponent::ApplyAttackOverlapMovement(
 	const FPLAttackOverlapBlockSettings& BlockSettings,
 	AActor* InstigatorActor,
 	AActor* TargetActor,
-	const bool bWasBlocked
+	const bool bWasBlocked,
+	const bool bWasDodged,
+	const bool bHasSuperArmor
 )
 {
 	if (MovementSettings.MoveDirection == EPLAttackOverlapMoveDirection::None)
+	{
+		return;
+	}
+
+	// Old project skipped movement if the hit was dodged or super armored.
+	if (bWasDodged || bHasSuperArmor)
 	{
 		return;
 	}
@@ -905,10 +1044,18 @@ void UPL_CombatComponent::ApplyAttackOverlapRotation(
 	const FPLAttackOverlapBlockSettings& BlockSettings,
 	AActor* InstigatorActor,
 	AActor* TargetActor,
-	const bool bWasBlocked
+	const bool bWasBlocked,
+	const bool bWasDodged,
+	const bool bHasSuperArmor
 )
 {
 	if (RotationSettings.RotationDirection == EPLAttackOverlapRotationDirection::None)
+	{
+		return;
+	}
+
+	// Old project skipped rotation if the hit was dodged or super armored.
+	if (bWasDodged || bHasSuperArmor)
 	{
 		return;
 	}
@@ -998,79 +1145,49 @@ void UPL_CombatComponent::ApplyAttackOverlapRotation(
 	);
 }
 
-void UPL_CombatComponent::ApplyAttackOverlapGameplayEffects(
+void UPL_CombatComponent::ApplyAttackOverlapDamageGameplayEffects(
 	const FPLActiveAttackOverlapWindow& Window,
 	AActor* HitActor,
-	const FHitResult& Hit)
+	const FHitResult& Hit
+) const
 {
-	if (!HitActor)
+	if (!HitActor || !GetOwner() || !GetOwner()->HasAuthority())
 	{
 		return;
 	}
 
-	if (Window.Settings.GameplayEffectsToApply.IsEmpty())
+	for (const FPLAttackOverlapGameplayEffect& EffectEntry : Window.Settings.DamageGameplayEffectsToApply)
 	{
-		return;
-	}
-
-	AActor* SourceActor = GetOwner();
-
-	if (!SourceActor || !SourceActor->HasAuthority())
-	{
-		return;
-	}
-
-	UAbilitySystemComponent* SourceASC = AbilitySystemComponent;
-	UAbilitySystemComponent* TargetASC = GetTargetAbilitySystemComponent(HitActor);
-
-	if (!SourceASC)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack overlap could not apply effects: source ASC missing. Source=%s Target=%s"),
-			*GetNameSafe(SourceActor),
-			*GetNameSafe(HitActor));
-		return;
-	}
-
-	if (!TargetASC)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("Attack overlap could not apply effects: target ASC missing. Source=%s Target=%s"),
-			*GetNameSafe(SourceActor),
-			*GetNameSafe(HitActor));
-		return;
-	}
-
-	FGameplayEffectContextHandle EffectContext = SourceASC->MakeEffectContext();
-	EffectContext.AddSourceObject(this);
-	EffectContext.AddInstigator(SourceActor, SourceActor);
-	EffectContext.AddHitResult(Hit);
-
-	for (const FPLAttackOverlapGameplayEffect& EffectToApply : Window.Settings.GameplayEffectsToApply)
-	{
-		if (!EffectToApply.GameplayEffectClass)
-		{
-			continue;
-		}
-
-		const FGameplayEffectSpecHandle SpecHandle = SourceASC->MakeOutgoingSpec(
-			EffectToApply.GameplayEffectClass,
-			EffectToApply.EffectLevel,
-			EffectContext
+		ApplyGameplayEffectToActor(
+			HitActor,
+			EffectEntry.GameplayEffectClass,
+			EffectEntry.EffectLevel,
+			&Hit
 		);
+	}
+}
 
-		if (!SpecHandle.IsValid())
-		{
-			UE_LOG(LogTemp, Warning, TEXT("Attack overlap failed to make GE spec. Source=%s Target=%s Effect=%s"),
-				*GetNameSafe(SourceActor),
-				*GetNameSafe(HitActor),
-				*GetNameSafe(EffectToApply.GameplayEffectClass));
-			continue;
-		}
+void UPL_CombatComponent::ApplyAttackOverlapReactionGameplayEffects(
+	const FPLActiveAttackOverlapWindow& Window,
+	AActor* HitActor,
+	const FHitResult& Hit
+) const
+{
+	if (!HitActor || !GetOwner() || !GetOwner()->HasAuthority())
+	{
+		return;
+	}
 
-		SourceASC->ApplyGameplayEffectSpecToTarget(
-			*SpecHandle.Data.Get(),
-			TargetASC
+	// This uses the old variable name intentionally.
+	// Existing notify data stays valid and is now considered "reaction effects."
+	for (const FPLAttackOverlapGameplayEffect& EffectEntry : Window.Settings.GameplayEffectsToApply)
+	{
+		ApplyGameplayEffectToActor(
+			HitActor,
+			EffectEntry.GameplayEffectClass,
+			EffectEntry.EffectLevel,
+			&Hit
 		);
-
 	}
 }
 
