@@ -2,13 +2,15 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Pawn.h"
-#include "MoverDataModelTypes.h"
-#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "MoverDataModelTypes.h"
 
 UPL_MoverPawnComponent::UPL_MoverPawnComponent()
 {
-	PrimaryComponentTick.bCanEverTick = false;
+	PrimaryComponentTick.bCanEverTick = true;
+	PrimaryComponentTick.bStartWithTickEnabled = false;
+	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
+
 	SetIsReplicatedByDefault(true);
 }
 
@@ -56,14 +58,49 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 {
+	ApplyForcedFacingYaw(Yaw);
+
+	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
+	if (OwnerPawn && OwnerPawn->IsLocallyControlled() && !OwnerPawn->HasAuthority())
+	{
+		ServerRequestForcedFacingYaw(Yaw);
+	}
+}
+
+void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Yaw)
+{
+	ApplyForcedFacingYaw(Yaw);
+}
+
+void UPL_MoverPawnComponent::ApplyForcedFacingYaw(float Yaw)
+{
+	Yaw = FRotator::NormalizeAxis(Yaw);
+
 	const FRotator YawRotation(0.f, Yaw, 0.f);
 
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
 
-	// A few frames is safer than one frame because ability activation and
-	// Mover input production may not happen in the exact same moment.
-	ForcedFacingFramesRemaining = 8;
+	// More than 8 because Mover may consume input on its own fixed step.
+	ForcedFacingFramesRemaining = 20;
+
+	ApplyForcedFacingActorRotation();
+
+	SetComponentTickEnabled(true);
+}
+
+void UPL_MoverPawnComponent::ApplyForcedFacingActorRotation() const
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || ForcedFacingIntent.IsNearlyZero())
+	{
+		return;
+	}
+
+	FRotator NewRotation = OwnerActor->GetActorRotation();
+	NewRotation.Yaw = ForcedFacingIntent.Rotation().Yaw;
+
+	OwnerActor->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
 }
 
 void UPL_MoverPawnComponent::ClearMoveIntent()
@@ -102,13 +139,7 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 		if (bHasForcedFacingIntent)
 		{
 			CharacterInputs.OrientationIntent = ForcedFacingIntent;
-
 			--ForcedFacingFramesRemaining;
-			if (ForcedFacingFramesRemaining <= 0)
-			{
-				bHasForcedFacingIntent = false;
-				ForcedFacingIntent = FVector::ZeroVector;
-			}
 		}
 
 		return;
@@ -134,12 +165,30 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	if (bHasForcedFacingIntent)
 	{
 		CharacterInputs.OrientationIntent = ForcedFacingIntent;
-
 		--ForcedFacingFramesRemaining;
-		if (ForcedFacingFramesRemaining <= 0)
-		{
-			bHasForcedFacingIntent = false;
-			ForcedFacingIntent = FVector::ZeroVector;
-		}
+	}
+}
+
+void UPL_MoverPawnComponent::TickComponent(
+	float DeltaTime,
+	ELevelTick TickType,
+	FActorComponentTickFunction* ThisTickFunction)
+{
+	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
+
+	if (!bHasForcedFacingIntent)
+	{
+		SetComponentTickEnabled(false);
+		return;
+	}
+
+	// Re-apply after Mover's update so the snap cannot be immediately overwritten.
+	ApplyForcedFacingActorRotation();
+
+	if (ForcedFacingFramesRemaining <= 0)
+	{
+		bHasForcedFacingIntent = false;
+		ForcedFacingIntent = FVector::ZeroVector;
+		SetComponentTickEnabled(false);
 	}
 }

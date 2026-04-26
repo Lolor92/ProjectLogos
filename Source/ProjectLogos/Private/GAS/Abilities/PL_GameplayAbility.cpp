@@ -80,13 +80,6 @@ void UPL_GameplayAbility::RotateAvatarToControllerYawOnCommit(
 
 	const float DesiredYaw = Controller->GetControlRotation().Yaw;
 
-	// Immediate visual snap, important because the montage may start right away.
-	FRotator NewRotation = Pawn->GetActorRotation();
-	NewRotation.Yaw = DesiredYaw;
-
-	Pawn->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
-
-	// Tell Mover to accept/keep that facing direction during its next input frames.
 	if (UPL_MoverPawnComponent* MoverPawnComponent = Pawn->GetMoverPawnComponent())
 	{
 		MoverPawnComponent->RequestForcedFacingYaw(DesiredYaw);

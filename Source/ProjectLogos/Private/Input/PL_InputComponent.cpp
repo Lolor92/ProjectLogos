@@ -447,10 +447,6 @@ void UPL_InputComponent::SnapOwnerFacingToControllerYawForAbility(
 
 	const float DesiredYaw = PlayerController->GetControlRotation().Yaw;
 
-	FRotator NewRotation = BasePawn->GetActorRotation();
-	NewRotation.Yaw = DesiredYaw;
-	BasePawn->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
-
 	if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
 	{
 		MoverPawnComponent->RequestForcedFacingYaw(DesiredYaw);
