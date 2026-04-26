@@ -1,5 +1,4 @@
 ﻿#include "Mover/PL_MoverPawnComponent.h"
-#include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Pawn.h"
@@ -8,10 +7,7 @@
 
 UPL_MoverPawnComponent::UPL_MoverPawnComponent()
 {
-	PrimaryComponentTick.bCanEverTick = true;
-	PrimaryComponentTick.bStartWithTickEnabled = false;
-	PrimaryComponentTick.TickGroup = TG_PostUpdateWork;
-
+	PrimaryComponentTick.bCanEverTick = false;
 	SetIsReplicatedByDefault(true);
 }
 
@@ -27,6 +23,14 @@ void UPL_MoverPawnComponent::BeginPlay()
 	if (UpdatedComponent)
 	{
 		CharacterMoverComponent->SetUpdatedComponent(UpdatedComponent);
+	}
+
+	if (CharacterMoverComponent)
+	{
+		// We sometimes do intentional one-shot external snaps,
+		// for example facing camera yaw when an ability activates.
+		CharacterMoverComponent->bAcceptExternalMovement = true;
+		CharacterMoverComponent->bWarnOnExternalMovement = false;
 	}
 
 	// Tell Mover what component represents the character visually.
@@ -67,38 +71,14 @@ void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
 
-	// Do not SetActorRotation immediately here.
-	// Mover can overwrite it later in the same frame.
-	QueueFacingSnapAfterMover(Yaw);
+	// One immediate external snap.
+	ApplyFacingSnapOnce(Yaw);
 
 	const APawn* OwnerPawn = Cast<APawn>(GetOwner());
 	if (OwnerPawn && OwnerPawn->IsLocallyControlled() && !OwnerPawn->HasAuthority())
 	{
 		ServerRequestForcedFacingYaw(Yaw);
 	}
-}
-
-void UPL_MoverPawnComponent::TickComponent(
-	float DeltaTime,
-	ELevelTick TickType,
-	FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-
-	if (!bHasPendingFacingSnap)
-	{
-		SetComponentTickEnabled(false);
-		return;
-	}
-
-	const float YawToApply = PendingFacingSnapYaw;
-
-	bHasPendingFacingSnap = false;
-	PendingFacingSnapYaw = 0.f;
-
-	ApplyFacingSnapOnce(YawToApply);
-
-	SetComponentTickEnabled(false);
 }
 
 void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Yaw)
@@ -110,15 +90,7 @@ void UPL_MoverPawnComponent::ServerRequestForcedFacingYaw_Implementation(float Y
 	ForcedFacingIntent = YawRotation.Vector();
 	bHasForcedFacingIntent = true;
 
-	QueueFacingSnapAfterMover(Yaw);
-}
-
-void UPL_MoverPawnComponent::QueueFacingSnapAfterMover(float Yaw)
-{
-	PendingFacingSnapYaw = FRotator::NormalizeAxis(Yaw);
-	bHasPendingFacingSnap = true;
-
-	SetComponentTickEnabled(true);
+	ApplyFacingSnapOnce(Yaw);
 }
 
 void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
@@ -129,21 +101,27 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 		return;
 	}
 
-	const FRotator NewRotation(0.f, FRotator::NormalizeAxis(Yaw), 0.f);
+	if (CharacterMoverComponent)
+	{
+		CharacterMoverComponent->bAcceptExternalMovement = true;
+		CharacterMoverComponent->bWarnOnExternalMovement = false;
+	}
 
-	if (UpdatedComponent)
-	{
-		UpdatedComponent->SetWorldRotation(
-			NewRotation,
-			false,
-			nullptr,
-			ETeleportType::ResetPhysics
-		);
-	}
-	else
-	{
-		OwnerActor->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
-	}
+	FRotator NewRotation = OwnerActor->GetActorRotation();
+	NewRotation.Yaw = FRotator::NormalizeAxis(Yaw);
+
+	OwnerActor->SetActorRotation(NewRotation, ETeleportType::TeleportPhysics);
+
+	UE_LOG(
+		LogTemp,
+		Warning,
+		TEXT("Facing snap applied. Actor=%s DesiredYaw=%.2f ResultYaw=%.2f Authority=%d Local=%d"),
+		*GetNameSafe(OwnerActor),
+		Yaw,
+		OwnerActor->GetActorRotation().Yaw,
+		OwnerActor->HasAuthority(),
+		Cast<APawn>(OwnerActor) ? Cast<APawn>(OwnerActor)->IsLocallyControlled() : false
+	);
 
 	if (OwnerActor->HasAuthority())
 	{
