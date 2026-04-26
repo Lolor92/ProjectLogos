@@ -271,6 +271,38 @@ struct FPLAttackOverlapHitStopSettings
 };
 
 USTRUCT(BlueprintType)
+struct FPLAttackOverlapBlockSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block")
+	bool bBlockable = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block",
+		meta=(EditCondition="bBlockable", EditConditionHides, ClampMin="0.0", ClampMax="180.0"))
+	float BlockAngleDegrees = 70.f;
+
+	// If false, blocked hits do not move the target/instigator using the notify movement settings.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block",
+		meta=(EditCondition="bBlockable", EditConditionHides))
+	bool bAllowMovementWhenBlocked = false;
+
+	// If false, blocked hits do not rotate the target/instigator using the notify rotation settings.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense|Block",
+		meta=(EditCondition="bBlockable", EditConditionHides))
+	bool bAllowRotationWhenBlocked = false;
+};
+
+USTRUCT(BlueprintType)
+struct FPLAttackOverlapDefenseSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapBlockSettings Block;
+};
+
+USTRUCT(BlueprintType)
 struct FPLAttackOverlapWindowSettings
 {
 	GENERATED_BODY()
@@ -300,6 +332,9 @@ struct FPLAttackOverlapWindowSettings
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop", meta=(ShowOnlyInnerProperties))
 	FPLAttackOverlapHitStopSettings HitStop;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Defense", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapDefenseSettings Defense;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Effects", meta=(TitleProperty="GameplayEffectClass"))
 	TArray<FPLAttackOverlapGameplayEffect> GameplayEffectsToApply;

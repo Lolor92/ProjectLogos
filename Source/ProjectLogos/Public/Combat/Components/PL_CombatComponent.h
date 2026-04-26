@@ -80,6 +80,8 @@ public:
 	UFUNCTION(BlueprintPure, Category="Combat|Block")
 	bool IsBlockingActive() const;
 
+	const FGameplayTag& GetBlockingTag() const { return BlockingTag; }
+
 	bool BeginAttackOverlapWindow(
 		const UAnimNotifyState* NotifyState,
 		USkeletalMeshComponent* MeshComp,
@@ -117,6 +119,16 @@ protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Block")
 	FGameplayTag BlockingTag;
 
+	// Applied to the attacker when their hit is blocked.
+	// Example: GE_Trigger_AttackBlocked, GE_BlockRecoil, etc.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Block")
+	TSubclassOf<UGameplayEffect> AttackerBlockedEffectClass;
+
+	// Applied to the defender when they successfully block.
+	// Example: GE_Trigger_BlockSuccess, GE_BlockImpact, etc.
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Combat|Block")
+	TSubclassOf<UGameplayEffect> DefenderBlockedEffectClass;
+
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Tag Reactions", meta=(TitleProperty="AnimBoolName"))
 	TArray<FPL_AnimBoolBinding> AnimBoolBindings;
 
@@ -129,7 +141,8 @@ private:
 	void ApplyAttackOverlapTransformEffects(
 		const FPLActiveAttackOverlapWindow& Window,
 		AActor* HitActor,
-		const FHitResult& Hit
+		const FHitResult& Hit,
+		bool bWasBlocked
 	);
 	void ApplyAttackOverlapGameplayEffects(
 		const FPLActiveAttackOverlapWindow& Window,
@@ -142,14 +155,37 @@ private:
 	);
 	void ApplyAttackOverlapRotation(
 		const FPLAttackOverlapRotationSettings& RotationSettings,
+		const FPLAttackOverlapBlockSettings& BlockSettings,
 		AActor* InstigatorActor,
-		AActor* TargetActor
+		AActor* TargetActor,
+		bool bWasBlocked
 	);
 	void ApplyAttackOverlapMovement(
 		const FPLAttackOverlapMovementSettings& MovementSettings,
+		const FPLAttackOverlapBlockSettings& BlockSettings,
 		AActor* InstigatorActor,
-		AActor* TargetActor
+		AActor* TargetActor,
+		bool bWasBlocked
 	);
+	bool IsAttackBlocked(
+		AActor* HitActor,
+		const FPLAttackOverlapBlockSettings& BlockSettings
+	) const;
+	static bool IsWithinBlockAngle(
+		const AActor* DefenderActor,
+		const AActor* AttackerActor,
+		float BlockAngleDegrees
+	);
+	void ApplyBlockGameplayEffects(
+		AActor* HitActor,
+		const FHitResult& Hit
+	) const;
+	void ApplyGameplayEffectToActor(
+		AActor* RecipientActor,
+		TSubclassOf<UGameplayEffect> GameplayEffectClass,
+		float EffectLevel,
+		const FHitResult* Hit
+	) const;
 	AActor* ResolveTransformRecipient(
 		EPLAttackOverlapTransformRecipient Recipient,
 		AActor* InstigatorActor,

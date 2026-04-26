@@ -84,6 +84,143 @@ bool UPL_CombatComponent::IsBlockingActive() const
 		&& AbilitySystemComponent->HasMatchingGameplayTag(BlockingTag);
 }
 
+bool UPL_CombatComponent::IsWithinBlockAngle(
+	const AActor* DefenderActor,
+	const AActor* AttackerActor,
+	const float BlockAngleDegrees
+)
+{
+	if (!DefenderActor || !AttackerActor)
+	{
+		return false;
+	}
+
+	FVector ToAttacker = AttackerActor->GetActorLocation() - DefenderActor->GetActorLocation();
+	ToAttacker.Z = 0.f;
+	ToAttacker = ToAttacker.GetSafeNormal();
+
+	FVector DefenderForward = DefenderActor->GetActorForwardVector();
+	DefenderForward.Z = 0.f;
+	DefenderForward = DefenderForward.GetSafeNormal();
+
+	if (ToAttacker.IsNearlyZero() || DefenderForward.IsNearlyZero())
+	{
+		return false;
+	}
+
+	const float Dot = FVector::DotProduct(DefenderForward, ToAttacker);
+	const float AngleDegrees = FMath::RadiansToDegrees(
+		FMath::Acos(FMath::Clamp(Dot, -1.f, 1.f))
+	);
+
+	return AngleDegrees <= BlockAngleDegrees;
+}
+
+bool UPL_CombatComponent::IsAttackBlocked(
+	AActor* HitActor,
+	const FPLAttackOverlapBlockSettings& BlockSettings
+) const
+{
+	if (!BlockSettings.bBlockable || !HitActor)
+	{
+		return false;
+	}
+
+	if (!BlockingTag.IsValid())
+	{
+		return false;
+	}
+
+	const UAbilitySystemComponent* TargetASC = GetTargetAbilitySystemComponent(HitActor);
+	if (!TargetASC || !TargetASC->HasMatchingGameplayTag(BlockingTag))
+	{
+		return false;
+	}
+
+	return IsWithinBlockAngle(
+		HitActor,
+		GetOwner(),
+		BlockSettings.BlockAngleDegrees
+	);
+}
+
+void UPL_CombatComponent::ApplyBlockGameplayEffects(
+	AActor* HitActor,
+	const FHitResult& Hit
+) const
+{
+	AActor* AttackerActor = GetOwner();
+	if (!AttackerActor || !HitActor || !AttackerActor->HasAuthority())
+	{
+		return;
+	}
+
+	ApplyGameplayEffectToActor(
+		AttackerActor,
+		AttackerBlockedEffectClass,
+		1.f,
+		&Hit
+	);
+
+	ApplyGameplayEffectToActor(
+		HitActor,
+		DefenderBlockedEffectClass,
+		1.f,
+		&Hit
+	);
+}
+
+void UPL_CombatComponent::ApplyGameplayEffectToActor(
+	AActor* RecipientActor,
+	const TSubclassOf<UGameplayEffect> GameplayEffectClass,
+	const float EffectLevel,
+	const FHitResult* Hit
+) const
+{
+	if (!RecipientActor || !GameplayEffectClass || !AbilitySystemComponent)
+	{
+		return;
+	}
+
+	UAbilitySystemComponent* RecipientASC = GetTargetAbilitySystemComponent(RecipientActor);
+	if (!RecipientASC)
+	{
+		return;
+	}
+
+	AActor* SourceActor = GetOwner();
+
+	FGameplayEffectContextHandle EffectContext = AbilitySystemComponent->MakeEffectContext();
+	EffectContext.AddSourceObject(const_cast<UPL_CombatComponent*>(this));
+
+	if (SourceActor)
+	{
+		EffectContext.AddInstigator(SourceActor, SourceActor);
+	}
+
+	if (Hit)
+	{
+		EffectContext.AddHitResult(*Hit);
+	}
+
+	const FGameplayEffectSpecHandle SpecHandle =
+		AbilitySystemComponent->MakeOutgoingSpec(
+			GameplayEffectClass,
+			EffectLevel,
+			EffectContext
+		);
+
+	if (!SpecHandle.IsValid())
+	{
+		return;
+	}
+
+	AbilitySystemComponent->ApplyGameplayEffectSpecToTarget(
+		*SpecHandle.Data.Get(),
+		RecipientASC
+	);
+}
+
 void UPL_CombatComponent::GrantDefaultAbilities()
 {
 	if (bDefaultAbilitiesGranted || !AbilitySystemComponent)
@@ -323,11 +460,29 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		Window.HitActors.Add(HitActorKey);
 	}
 
-	UE_LOG(LogTemp, Log, TEXT("Attack overlap detected. Source=%s Target=%s"),
-		*GetNameSafe(GetOwner()),
-		*GetNameSafe(HitActor));
+	const bool bWasBlocked = IsAttackBlocked(
+		HitActor,
+		Window.Settings.Defense.Block
+	);
 
-	ApplyAttackOverlapTransformEffects(Window, HitActor, Hit);
+	ApplyAttackOverlapTransformEffects(Window, HitActor, Hit, bWasBlocked);
+
+	if (bWasBlocked)
+	{
+		ApplyBlockGameplayEffects(HitActor, Hit);
+
+		UE_LOG(
+			LogTemp,
+			Log,
+			TEXT("Attack overlap blocked. Attacker=%s Defender=%s"),
+			*GetNameSafe(GetOwner()),
+			*GetNameSafe(HitActor)
+		);
+
+		BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
+		return;
+	}
+
 	ApplyAttackOverlapHitStop(Window, HitActor);
 	ApplyAttackOverlapGameplayEffects(Window, HitActor, Hit);
 
@@ -439,7 +594,8 @@ FTransform UPL_CombatComponent::MakeAttackOverlapShapeTransform(
 void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 	const FPLActiveAttackOverlapWindow& Window,
 	AActor* HitActor,
-	const FHitResult& Hit)
+	const FHitResult& Hit,
+	const bool bWasBlocked)
 {
 	AActor* InstigatorActor = GetOwner();
 	if (!InstigatorActor || !HitActor)
@@ -453,8 +609,20 @@ void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
 		return;
 	}
 
-	ApplyAttackOverlapRotation(Window.Settings.Rotation, InstigatorActor, HitActor);
-	ApplyAttackOverlapMovement(Window.Settings.Movement, InstigatorActor, HitActor);
+	ApplyAttackOverlapRotation(
+		Window.Settings.Rotation,
+		Window.Settings.Defense.Block,
+		InstigatorActor,
+		HitActor,
+		bWasBlocked
+	);
+	ApplyAttackOverlapMovement(
+		Window.Settings.Movement,
+		Window.Settings.Defense.Block,
+		InstigatorActor,
+		HitActor,
+		bWasBlocked
+	);
 }
 
 void UPL_CombatComponent::ApplyAttackOverlapHitStop(
@@ -556,11 +724,18 @@ void UPL_CombatComponent::ApplyHitStopToActor(
 
 void UPL_CombatComponent::ApplyAttackOverlapMovement(
 	const FPLAttackOverlapMovementSettings& MovementSettings,
+	const FPLAttackOverlapBlockSettings& BlockSettings,
 	AActor* InstigatorActor,
-	AActor* TargetActor
+	AActor* TargetActor,
+	const bool bWasBlocked
 )
 {
 	if (MovementSettings.MoveDirection == EPLAttackOverlapMoveDirection::None)
+	{
+		return;
+	}
+
+	if (bWasBlocked && !BlockSettings.bAllowMovementWhenBlocked)
 	{
 		return;
 	}
@@ -649,11 +824,18 @@ void UPL_CombatComponent::ApplyAttackOverlapMovement(
 
 void UPL_CombatComponent::ApplyAttackOverlapRotation(
 	const FPLAttackOverlapRotationSettings& RotationSettings,
+	const FPLAttackOverlapBlockSettings& BlockSettings,
 	AActor* InstigatorActor,
-	AActor* TargetActor
+	AActor* TargetActor,
+	const bool bWasBlocked
 )
 {
 	if (RotationSettings.RotationDirection == EPLAttackOverlapRotationDirection::None)
+	{
+		return;
+	}
+
+	if (bWasBlocked && !BlockSettings.bAllowRotationWhenBlocked)
 	{
 		return;
 	}
@@ -811,11 +993,6 @@ void UPL_CombatComponent::ApplyAttackOverlapGameplayEffects(
 			TargetASC
 		);
 
-		UE_LOG(LogTemp, Log, TEXT("Attack overlap applied GE. Source=%s Target=%s Effect=%s Level=%.2f"),
-			*GetNameSafe(SourceActor),
-			*GetNameSafe(HitActor),
-			*GetNameSafe(EffectToApply.GameplayEffectClass),
-			EffectToApply.EffectLevel);
 	}
 }
 
