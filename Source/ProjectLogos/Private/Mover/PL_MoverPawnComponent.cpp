@@ -1,9 +1,10 @@
-﻿#include "Mover/PL_MoverPawnComponent.h"
+#include "Mover/PL_MoverPawnComponent.h"
 #include "Backends/MoverBackendLiaison.h"
 #include "Combat/Components/PL_CombatComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
+#include "DefaultMovementSet/Settings/CommonLegacyMovementSettings.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "MoverComponent.h"
@@ -25,8 +26,12 @@ void UPL_MoverPawnComponent::BeginPlay()
 	Super::BeginPlay();
 
 	ResolveOwnerComponents();
+	CacheBaseMoverMaxSpeed();
 
-	if (!CharacterMoverComponent) return;
+	if (!CharacterMoverComponent)
+	{
+		return;
+	}
 
 	// Tell Mover what component it should physically move.
 	if (UpdatedComponent)
@@ -515,6 +520,50 @@ void UPL_MoverPawnComponent::ClearMoveIntent()
 	CachedMoveInputIntent = FVector::ZeroVector;
 }
 
+void UPL_MoverPawnComponent::CacheBaseMoverMaxSpeed()
+{
+	if (!CharacterMoverComponent)
+	{
+		return;
+	}
+
+	UCommonLegacyMovementSettings* CommonSettings =
+		CharacterMoverComponent->FindSharedSettings_Mutable<UCommonLegacyMovementSettings>();
+
+	if (!CommonSettings)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Mover speed modifier failed: no CommonLegacyMovementSettings found on %s."),
+			*GetNameSafe(GetOwner()));
+		return;
+	}
+
+	BaseMoverMaxSpeed = CommonSettings->MaxSpeed;
+}
+
+void UPL_MoverPawnComponent::ApplyMoverMaxSpeedMultiplier(const float SpeedMultiplier)
+{
+	if (!CharacterMoverComponent)
+	{
+		return;
+	}
+
+	UCommonLegacyMovementSettings* CommonSettings =
+		CharacterMoverComponent->FindSharedSettings_Mutable<UCommonLegacyMovementSettings>();
+
+	if (!CommonSettings)
+	{
+		return;
+	}
+
+	if (BaseMoverMaxSpeed <= 0.f)
+	{
+		BaseMoverMaxSpeed = CommonSettings->MaxSpeed;
+	}
+
+	const float ClampedMultiplier = FMath::Clamp(SpeedMultiplier, 0.f, 1.f);
+	CommonSettings->MaxSpeed = BaseMoverMaxSpeed * ClampedMultiplier;
+}
+
 bool UPL_MoverPawnComponent::IsBlockingMovementActive() const
 {
 	const ABasePawn* BasePawn = Cast<ABasePawn>(GetOwner());
@@ -613,10 +662,10 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 	// Convert local input into camera-relative world movement.
 	const FVector WorldMoveIntent = YawRotation.RotateVector(CachedMoveInputIntent);
 	const float SpeedMultiplier = GetMovementInputSpeedMultiplier(WorldMoveIntent);
-	const FVector ScaledWorldMoveIntent = WorldMoveIntent * SpeedMultiplier;
+	ApplyMoverMaxSpeedMultiplier(SpeedMultiplier);
 
 	CharacterInputs.ControlRotation = ControlRotation;
-	CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, ScaledWorldMoveIntent);
+	CharacterInputs.SetMoveInput(EMoveInputType::DirectionalIntent, WorldMoveIntent);
 
 	if (WorldMoveIntent.SizeSquared2D() > 0.01f)
 	{

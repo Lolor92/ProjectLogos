@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
@@ -150,6 +150,9 @@ private:
 
 	void WriteCurrentTransformToMoverSyncState() const;
 
+	void CacheBaseMoverMaxSpeed();
+	void ApplyMoverMaxSpeedMultiplier(float SpeedMultiplier);
+
 	float GetMovementInputSpeedMultiplier(const FVector& WorldMoveIntent) const;
 	bool IsBlockingMovementActive() const;
 	bool IsMovingBackward(const FVector& WorldMoveIntent) const;
@@ -163,6 +166,9 @@ private:
 
 	// Local input direction. Usually X = forward, Y = right.
 	FVector CachedMoveInputIntent = FVector::ZeroVector;
+
+	UPROPERTY(Transient)
+	float BaseMoverMaxSpeed = 0.f;
 
 	UPROPERTY(Transient)
 	float HitStopRootMotionTimeScale = 1.f;
