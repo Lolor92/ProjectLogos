@@ -101,8 +101,6 @@ public:
 	}
 
 protected:
-	void RotateAvatarToControllerYawOnCommit(const FGameplayAbilityActorInfo* ActorInfo) const;
-
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Rotation")
 	bool bRotateToControllerYawOnActivate = false;
 

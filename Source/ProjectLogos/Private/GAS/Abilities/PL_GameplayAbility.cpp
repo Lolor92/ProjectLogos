@@ -5,9 +5,6 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
-#include "GameFramework/Controller.h"
-#include "Mover/PL_MoverPawnComponent.h"
-#include "Pawn/BasePawn.h"
 
 UPL_GameplayAbility::UPL_GameplayAbility()
 {
@@ -41,49 +38,7 @@ void UPL_GameplayAbility::CommitExecute(
 {
 	Super::CommitExecute(Handle, ActorInfo, ActivationInfo);
 
-	RotateAvatarToControllerYawOnCommit(ActorInfo);
 	CancelOtherActiveAbilities();
-}
-
-void UPL_GameplayAbility::RotateAvatarToControllerYawOnCommit(
-	const FGameplayAbilityActorInfo* ActorInfo) const
-{
-	if (!bRotateToControllerYawOnActivate)
-	{
-		return;
-	}
-
-	if (!ActorInfo)
-	{
-		return;
-	}
-
-	if (!ActorInfo->IsLocallyControlled() && !ActorInfo->IsNetAuthority())
-	{
-		return;
-	}
-
-	ABasePawn* Pawn = Cast<ABasePawn>(ActorInfo->AvatarActor.Get());
-	if (!Pawn)
-	{
-		return;
-	}
-
-	AController* Controller = ActorInfo->PlayerController.IsValid()
-		? ActorInfo->PlayerController.Get()
-		: Pawn->GetController();
-
-	if (!Controller)
-	{
-		return;
-	}
-
-	const float DesiredYaw = Controller->GetControlRotation().Yaw;
-
-	if (UPL_MoverPawnComponent* MoverPawnComponent = Pawn->GetMoverPawnComponent())
-	{
-		MoverPawnComponent->RequestForcedFacingYaw(DesiredYaw);
-	}
 }
 
 bool UPL_GameplayAbility::CanUseAbility(const FGameplayAbilityActorInfo* ActorInfo) const
