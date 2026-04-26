@@ -64,11 +64,10 @@ public:
 		FGameplayTagContainer* OptionalRelevantTags = nullptr
 	) const override;
 
-	virtual void ActivateAbility(
+	virtual void CommitExecute(
 		const FGameplayAbilitySpecHandle Handle,
 		const FGameplayAbilityActorInfo* ActorInfo,
-		const FGameplayAbilityActivationInfo ActivationInfo,
-		const FGameplayEventData* TriggerEventData
+		const FGameplayAbilityActivationInfo ActivationInfo
 	) override;
 
 	// Next ability to activate when this ability continues a combo.
@@ -96,6 +95,11 @@ public:
 	}
 
 protected:
+	void RotateAvatarToControllerYawOnCommit(const FGameplayAbilityActorInfo* ActorInfo) const;
+
+	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Rotation")
+	bool bRotateToControllerYawOnActivate = false;
+
 	// Ability class to activate when combo input is pressed again.
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Combo")
 	TSubclassOf<UGameplayAbility> ComboAbilityClass = nullptr;

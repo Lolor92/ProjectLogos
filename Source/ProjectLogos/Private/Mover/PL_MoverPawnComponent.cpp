@@ -54,6 +54,18 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 	CachedMoveInputIntent = MoveIntent;
 }
 
+void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
+{
+	const FRotator YawRotation(0.f, Yaw, 0.f);
+
+	ForcedFacingIntent = YawRotation.Vector();
+	bHasForcedFacingIntent = true;
+
+	// A few frames is safer than one frame because ability activation and
+	// Mover input production may not happen in the exact same moment.
+	ForcedFacingFramesRemaining = 3;
+}
+
 void UPL_MoverPawnComponent::ClearMoveIntent()
 {
 	// No input means no movement intent.
@@ -87,6 +99,18 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 			CharacterInputs.OrientationIntent = CachedMoveInputIntent.GetSafeNormal2D();
 		}
 
+		if (bHasForcedFacingIntent)
+		{
+			CharacterInputs.OrientationIntent = ForcedFacingIntent;
+
+			--ForcedFacingFramesRemaining;
+			if (ForcedFacingFramesRemaining <= 0)
+			{
+				bHasForcedFacingIntent = false;
+				ForcedFacingIntent = FVector::ZeroVector;
+			}
+		}
+
 		return;
 	}
 
@@ -105,5 +129,17 @@ void UPL_MoverPawnComponent::ProduceInput_Implementation(
 		CharacterInputs.OrientationIntent = bOrientToCameraYaw
 			? YawRotation.Vector()
 			: WorldMoveIntent.GetSafeNormal2D();
+	}
+
+	if (bHasForcedFacingIntent)
+	{
+		CharacterInputs.OrientationIntent = ForcedFacingIntent;
+
+		--ForcedFacingFramesRemaining;
+		if (ForcedFacingFramesRemaining <= 0)
+		{
+			bHasForcedFacingIntent = false;
+			ForcedFacingIntent = FVector::ZeroVector;
+		}
 	}
 }

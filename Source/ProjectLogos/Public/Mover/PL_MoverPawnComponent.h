@@ -20,6 +20,9 @@ class PROJECTLOGOS_API UPL_MoverPawnComponent : public UActorComponent, public I
 public:
 	UPL_MoverPawnComponent();
 
+	UFUNCTION(BlueprintCallable, Category="Mover|Facing")
+	void RequestForcedFacingYaw(float Yaw);
+
 	// Store the movement direction requested by input code.
 	UFUNCTION(BlueprintCallable, Category="Mover")
 	void RequestMoveIntent(const FVector& MoveIntent);
@@ -66,6 +69,13 @@ protected:
 	bool bOrientToCameraYaw = true;
 
 private:
+	bool bHasForcedFacingIntent = false;
+
+	FVector ForcedFacingIntent = FVector::ZeroVector;
+
+	// Keep it alive for a few Mover input frames so Mover actually consumes it.
+	int32 ForcedFacingFramesRemaining = 0;
+
 	// Local input direction. Usually X = forward, Y = right.
 	FVector CachedMoveInputIntent = FVector::ZeroVector;
 };

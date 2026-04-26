@@ -5,6 +5,9 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
+#include "GameFramework/Controller.h"
+#include "Mover/PL_MoverPawnComponent.h"
+#include "Pawn/BasePawn.h"
 
 UPL_GameplayAbility::UPL_GameplayAbility()
 {
@@ -31,15 +34,63 @@ bool UPL_GameplayAbility::CanActivateAbility(
 	) && CanUseAbility(ActorInfo);
 }
 
-void UPL_GameplayAbility::ActivateAbility(
+void UPL_GameplayAbility::CommitExecute(
 	const FGameplayAbilitySpecHandle Handle,
 	const FGameplayAbilityActorInfo* ActorInfo,
-	const FGameplayAbilityActivationInfo ActivationInfo,
-	const FGameplayEventData* TriggerEventData)
+	const FGameplayAbilityActivationInfo ActivationInfo)
 {
-	Super::ActivateAbility(Handle, ActorInfo, ActivationInfo, TriggerEventData);
+	Super::CommitExecute(Handle, ActorInfo, ActivationInfo);
 
+	RotateAvatarToControllerYawOnCommit(ActorInfo);
 	CancelOtherActiveAbilities();
+}
+
+void UPL_GameplayAbility::RotateAvatarToControllerYawOnCommit(
+	const FGameplayAbilityActorInfo* ActorInfo) const
+{
+	if (!bRotateToControllerYawOnActivate)
+	{
+		return;
+	}
+
+	if (!ActorInfo)
+	{
+		return;
+	}
+
+	if (!ActorInfo->IsLocallyControlled() && !ActorInfo->IsNetAuthority())
+	{
+		return;
+	}
+
+	ABasePawn* Pawn = Cast<ABasePawn>(ActorInfo->AvatarActor.Get());
+	if (!Pawn)
+	{
+		return;
+	}
+
+	AController* Controller = ActorInfo->PlayerController.IsValid()
+		? ActorInfo->PlayerController.Get()
+		: Pawn->GetController();
+
+	if (!Controller)
+	{
+		return;
+	}
+
+	const float DesiredYaw = Controller->GetControlRotation().Yaw;
+
+	// Immediate visual snap, important because the montage may start right away.
+	FRotator NewRotation = Pawn->GetActorRotation();
+	NewRotation.Yaw = DesiredYaw;
+
+	Pawn->SetActorRotation(NewRotation, ETeleportType::ResetPhysics);
+
+	// Tell Mover to accept/keep that facing direction during its next input frames.
+	if (UPL_MoverPawnComponent* MoverPawnComponent = Pawn->GetMoverPawnComponent())
+	{
+		MoverPawnComponent->RequestForcedFacingYaw(DesiredYaw);
+	}
 }
 
 bool UPL_GameplayAbility::CanUseAbility(const FGameplayAbilityActorInfo* ActorInfo) const
