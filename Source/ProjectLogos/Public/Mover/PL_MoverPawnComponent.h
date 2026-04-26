@@ -23,6 +23,15 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Mover|Facing")
 	void RequestForcedFacingYaw(float Yaw);
 
+	void ApplyAuthoritativeExternalTransformSnap(
+		const FVector& NewLocation,
+		const FRotator& NewRotation,
+		bool bApplyLocation,
+		bool bApplyRotation,
+		bool bSweep,
+		ETeleportType TeleportType
+	);
+
 	// Store the movement direction requested by input code.
 	UFUNCTION(BlueprintCallable, Category="Mover")
 	void RequestMoveIntent(const FVector& MoveIntent);
@@ -70,6 +79,24 @@ protected:
 
 private:
 	void ApplyFacingSnapOnce(float Yaw) const;
+	void ApplyExternalTransformSnap(
+		const FVector& NewLocation,
+		const FRotator& NewRotation,
+		bool bApplyLocation,
+		bool bApplyRotation,
+		bool bSweep,
+		ETeleportType TeleportType
+	) const;
+
+	UFUNCTION(Client, Reliable)
+	void ClientApplyExternalTransformSnap(
+		FVector NewLocation,
+		FRotator NewRotation,
+		bool bApplyLocation,
+		bool bApplyRotation,
+		bool bSweep,
+		ETeleportType TeleportType
+	);
 	void WriteCurrentTransformToMoverSyncState() const;
 
 	UFUNCTION(Server, Reliable)

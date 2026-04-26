@@ -1,5 +1,6 @@
 ﻿#include "Mover/PL_MoverPawnComponent.h"
 #include "Backends/MoverBackendLiaison.h"
+#include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "DefaultMovementSet/CharacterMoverComponent.h"
 #include "GameFramework/Pawn.h"
@@ -66,6 +67,66 @@ void UPL_MoverPawnComponent::RequestMoveIntent(const FVector& MoveIntent)
 	CachedMoveInputIntent = MoveIntent;
 }
 
+void UPL_MoverPawnComponent::ApplyAuthoritativeExternalTransformSnap(
+	const FVector& NewLocation,
+	const FRotator& NewRotation,
+	const bool bApplyLocation,
+	const bool bApplyRotation,
+	const bool bSweep,
+	const ETeleportType TeleportType
+)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !OwnerActor->HasAuthority())
+	{
+		return;
+	}
+
+	// Server authoritative result.
+	ApplyExternalTransformSnap(
+		NewLocation,
+		NewRotation,
+		bApplyLocation,
+		bApplyRotation,
+		bSweep,
+		TeleportType
+	);
+
+	// The owning client is an autonomous proxy and may keep predicting with old local state.
+	// Send the same one-shot transform directly to that owner.
+	const APawn* OwnerPawn = Cast<APawn>(OwnerActor);
+	if (OwnerPawn && OwnerPawn->GetController() && !OwnerPawn->GetController()->IsLocalController())
+	{
+		ClientApplyExternalTransformSnap(
+			NewLocation,
+			NewRotation,
+			bApplyLocation,
+			bApplyRotation,
+			bSweep,
+			TeleportType
+		);
+	}
+}
+
+void UPL_MoverPawnComponent::ClientApplyExternalTransformSnap_Implementation(
+	FVector NewLocation,
+	FRotator NewRotation,
+	bool bApplyLocation,
+	bool bApplyRotation,
+	bool bSweep,
+	ETeleportType TeleportType
+)
+{
+	ApplyExternalTransformSnap(
+		NewLocation,
+		NewRotation,
+		bApplyLocation,
+		bApplyRotation,
+		bSweep,
+		TeleportType
+	);
+}
+
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
 {
 	Yaw = FRotator::NormalizeAxis(Yaw);
@@ -125,6 +186,58 @@ void UPL_MoverPawnComponent::ApplyFacingSnapOnce(float Yaw) const
 		OwnerActor->HasAuthority(),
 		Cast<APawn>(OwnerActor) ? Cast<APawn>(OwnerActor)->IsLocallyControlled() : false
 	);
+
+	if (OwnerActor->HasAuthority())
+	{
+		OwnerActor->ForceNetUpdate();
+	}
+}
+
+void UPL_MoverPawnComponent::ApplyExternalTransformSnap(
+	const FVector& NewLocation,
+	const FRotator& NewRotation,
+	const bool bApplyLocation,
+	const bool bApplyRotation,
+	const bool bSweep,
+	const ETeleportType TeleportType
+) const
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor)
+	{
+		return;
+	}
+
+	USceneComponent* MoveComponent = UpdatedComponent.Get();
+	if (!MoveComponent)
+	{
+		MoveComponent = OwnerActor->GetRootComponent();
+	}
+
+	if (!MoveComponent)
+	{
+		return;
+	}
+
+	const FVector FinalLocation = bApplyLocation
+		? NewLocation
+		: MoveComponent->GetComponentLocation();
+
+	const FRotator FinalRotation = bApplyRotation
+		? NewRotation
+		: MoveComponent->GetComponentRotation();
+
+	FHitResult SweepHit;
+
+	MoveComponent->SetWorldLocationAndRotation(
+		FinalLocation,
+		FinalRotation,
+		bSweep,
+		&SweepHit,
+		TeleportType
+	);
+
+	WriteCurrentTransformToMoverSyncState();
 
 	if (OwnerActor->HasAuthority())
 	{
