@@ -30,7 +30,11 @@ struct FPLActiveAttackOverlapWindow
 
 	FTransform PreviousShapeTransform = FTransform::Identity;
 
+	bool bHitStopAppliedThisWindow = false;
+
 	TSet<TWeakObjectPtr<AActor>> HitActors;
+
+	TSet<TWeakObjectPtr<AActor>> HitStopAppliedActors;
 };
 
 // Drives an AnimInstance bool from one or more gameplay tags.
@@ -116,11 +120,53 @@ protected:
 private:
 	void ProcessAttackOverlapWindow(FPLActiveAttackOverlapWindow& Window);
 	void HandleAttackOverlapHit(FPLActiveAttackOverlapWindow& Window, const FHitResult& Hit);
+	void ApplyAttackOverlapTransformEffects(
+		const FPLActiveAttackOverlapWindow& Window,
+		AActor* HitActor,
+		const FHitResult& Hit
+	);
 	void ApplyAttackOverlapGameplayEffects(
 		const FPLActiveAttackOverlapWindow& Window,
 		AActor* HitActor,
 		const FHitResult& Hit
 	);
+	void ApplyAttackOverlapHitStop(
+		FPLActiveAttackOverlapWindow& Window,
+		AActor* HitActor
+	);
+	void ApplyAttackOverlapRotation(
+		const FPLAttackOverlapRotationSettings& RotationSettings,
+		AActor* InstigatorActor,
+		AActor* TargetActor
+	);
+	void ApplyAttackOverlapMovement(
+		const FPLAttackOverlapMovementSettings& MovementSettings,
+		AActor* InstigatorActor,
+		AActor* TargetActor
+	);
+	AActor* ResolveTransformRecipient(
+		EPLAttackOverlapTransformRecipient Recipient,
+		AActor* InstigatorActor,
+		AActor* TargetActor
+	) const;
+	AActor* ResolveReferenceActor(
+		EPLAttackOverlapReferenceActorSource Source,
+		AActor* InstigatorActor,
+		AActor* TargetActor
+	) const;
+	void ApplyMoverAwareTransformToActor(
+		AActor* Actor,
+		const FVector& NewLocation,
+		const FRotator& NewRotation,
+		bool bApplyLocation,
+		bool bApplyRotation,
+		bool bSweep,
+		ETeleportType TeleportType
+	) const;
+	void ApplyHitStopToActor(
+		AActor* Actor,
+		const FPLAttackOverlapHitStopSettings& HitStopSettings
+	) const;
 	UAbilitySystemComponent* GetTargetAbilitySystemComponent(AActor* TargetActor) const;
 	void DrawAttackOverlapDebug(const FPLActiveAttackOverlapWindow& Window, const FTransform& ShapeTransform, bool bHit) const;
 

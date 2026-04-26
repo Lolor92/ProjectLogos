@@ -32,6 +32,17 @@ public:
 		ETeleportType TeleportType
 	);
 
+	UFUNCTION(BlueprintCallable, Category="Mover|Hit Stop")
+	void ApplyAuthoritativeHitStop(
+		float Duration,
+		float TimeScale,
+		bool bAffectAnimation,
+		bool bAffectMoverRootMotion
+	);
+
+	UFUNCTION(BlueprintCallable, Category="Mover|Hit Stop")
+	void CancelHitStop();
+
 	// Store the movement direction requested by input code.
 	UFUNCTION(BlueprintCallable, Category="Mover")
 	void RequestMoveIntent(const FVector& MoveIntent);
@@ -47,6 +58,11 @@ public:
 	// True when we have meaningful 2D movement input.
 	UFUNCTION(BlueprintPure, Category="Mover")
 	bool HasMoveInput() const { return CachedMoveInputIntent.SizeSquared2D() > KINDA_SMALL_NUMBER; }
+
+	float GetHitStopRootMotionTimeScale() const
+	{
+		return HitStopRootMotionTimeScale;
+	}
 
 protected:
 	// Finds and configures the owner pawn's Mover pieces.
@@ -97,6 +113,24 @@ private:
 		bool bSweep,
 		ETeleportType TeleportType
 	);
+
+	UFUNCTION(NetMulticast, Unreliable)
+	void MulticastApplyHitStop(
+		float Duration,
+		float TimeScale,
+		bool bAffectAnimation,
+		bool bAffectMoverRootMotion
+	);
+
+	void ApplyHitStopLocal(
+		float Duration,
+		float TimeScale,
+		bool bAffectAnimation,
+		bool bAffectMoverRootMotion
+	);
+
+	void FinishHitStop(uint32 Serial);
+
 	void WriteCurrentTransformToMoverSyncState() const;
 
 	UFUNCTION(Server, Reliable)
@@ -108,4 +142,17 @@ private:
 
 	// Local input direction. Usually X = forward, Y = right.
 	FVector CachedMoveInputIntent = FVector::ZeroVector;
+
+	UPROPERTY(Transient)
+	float HitStopRootMotionTimeScale = 1.f;
+
+	UPROPERTY(Transient)
+	float SavedGlobalAnimRateScale = 1.f;
+
+	UPROPERTY(Transient)
+	bool bHasSavedGlobalAnimRateScale = false;
+
+	FTimerHandle HitStopTimerHandle;
+
+	uint32 HitStopSerial = 0;
 };

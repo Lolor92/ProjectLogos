@@ -5,6 +5,8 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Engine/World.h"
 #include "GAS/Component/PL_AbilitySystemComponent.h"
+#include "Mover/PL_MoverPawnComponent.h"
+#include "Pawn/BasePawn.h"
 
 UPL_GameplayAbility::UPL_GameplayAbility()
 {
@@ -39,6 +41,20 @@ void UPL_GameplayAbility::CommitExecute(
 	Super::CommitExecute(Handle, ActorInfo, ActivationInfo);
 
 	CancelOtherActiveAbilities();
+}
+
+void UPL_GameplayAbility::CancelAvatarHitStop() const
+{
+	if (const FGameplayAbilityActorInfo* Info = GetCurrentActorInfo())
+	{
+		if (ABasePawn* BasePawn = Cast<ABasePawn>(Info->AvatarActor.Get()))
+		{
+			if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
+			{
+				MoverPawnComponent->CancelHitStop();
+			}
+		}
+	}
 }
 
 bool UPL_GameplayAbility::CanUseAbility(const FGameplayAbilityActorInfo* ActorInfo) const

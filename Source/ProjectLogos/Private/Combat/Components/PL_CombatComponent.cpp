@@ -10,6 +10,7 @@
 #include "GAS/Component/PL_AbilitySystemComponent.h"
 #include "GAS/Data/PL_AbilitySet.h"
 #include "GameplayEffect.h"
+#include "Mover/PL_MoverPawnComponent.h"
 #include "Pawn/BasePawn.h"
 
 UPL_CombatComponent::UPL_CombatComponent()
@@ -319,6 +320,8 @@ void UPL_CombatComponent::HandleAttackOverlapHit(
 		*GetNameSafe(GetOwner()),
 		*GetNameSafe(HitActor));
 
+	ApplyAttackOverlapTransformEffects(Window, HitActor, Hit);
+	ApplyAttackOverlapHitStop(Window, HitActor);
 	ApplyAttackOverlapGameplayEffects(Window, HitActor, Hit);
 
 	BP_OnAttackOverlapDetected(HitActor, Hit, Window.MeshComp.Get());
@@ -426,6 +429,308 @@ FTransform UPL_CombatComponent::MakeAttackOverlapShapeTransform(
 	return LocalShapeTransform * SocketTransform;
 }
 
+void UPL_CombatComponent::ApplyAttackOverlapTransformEffects(
+	const FPLActiveAttackOverlapWindow& Window,
+	AActor* HitActor,
+	const FHitResult& Hit)
+{
+	AActor* InstigatorActor = GetOwner();
+	if (!InstigatorActor || !HitActor)
+	{
+		return;
+	}
+
+	// Target movement/rotation must be server authoritative.
+	if (!InstigatorActor->HasAuthority())
+	{
+		return;
+	}
+
+	ApplyAttackOverlapRotation(Window.Settings.Rotation, InstigatorActor, HitActor);
+	ApplyAttackOverlapMovement(Window.Settings.Movement, InstigatorActor, HitActor);
+}
+
+void UPL_CombatComponent::ApplyAttackOverlapHitStop(
+	FPLActiveAttackOverlapWindow& Window,
+	AActor* HitActor
+)
+{
+	if (!HitActor)
+	{
+		return;
+	}
+
+	AActor* InstigatorActor = GetOwner();
+	if (!InstigatorActor || !InstigatorActor->HasAuthority())
+	{
+		return;
+	}
+
+	const FPLAttackOverlapHitStopSettings& HitStopSettings = Window.Settings.HitStop;
+
+	if (!HitStopSettings.IsEnabled())
+	{
+		return;
+	}
+
+	switch (HitStopSettings.ApplicationMode)
+	{
+	case EPLAttackOverlapHitStopApplicationMode::OncePerNotify:
+	{
+		if (Window.bHitStopAppliedThisWindow)
+		{
+			return;
+		}
+
+		Window.bHitStopAppliedThisWindow = true;
+		break;
+	}
+
+	case EPLAttackOverlapHitStopApplicationMode::OncePerHitActor:
+	{
+		const TWeakObjectPtr<AActor> HitActorKey(HitActor);
+
+		if (Window.HitStopAppliedActors.Contains(HitActorKey))
+		{
+			return;
+		}
+
+		Window.HitStopAppliedActors.Add(HitActorKey);
+		break;
+	}
+
+	default:
+		break;
+	}
+
+	switch (HitStopSettings.Recipient)
+	{
+	case EPLAttackOverlapHitStopRecipient::Instigator:
+		ApplyHitStopToActor(InstigatorActor, HitStopSettings);
+		break;
+
+	case EPLAttackOverlapHitStopRecipient::Target:
+		ApplyHitStopToActor(HitActor, HitStopSettings);
+		break;
+
+	case EPLAttackOverlapHitStopRecipient::Both:
+		ApplyHitStopToActor(InstigatorActor, HitStopSettings);
+		ApplyHitStopToActor(HitActor, HitStopSettings);
+		break;
+
+	default:
+		break;
+	}
+}
+
+void UPL_CombatComponent::ApplyHitStopToActor(
+	AActor* Actor,
+	const FPLAttackOverlapHitStopSettings& HitStopSettings
+) const
+{
+	if (!Actor || !Actor->HasAuthority())
+	{
+		return;
+	}
+
+	if (ABasePawn* BasePawn = Cast<ABasePawn>(Actor))
+	{
+		if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
+		{
+			MoverPawnComponent->ApplyAuthoritativeHitStop(
+				HitStopSettings.Duration,
+				HitStopSettings.TimeScale,
+				HitStopSettings.bAffectAnimation,
+				HitStopSettings.bAffectMoverRootMotion
+			);
+		}
+	}
+}
+
+void UPL_CombatComponent::ApplyAttackOverlapMovement(
+	const FPLAttackOverlapMovementSettings& MovementSettings,
+	AActor* InstigatorActor,
+	AActor* TargetActor
+)
+{
+	if (MovementSettings.MoveDirection == EPLAttackOverlapMoveDirection::None)
+	{
+		return;
+	}
+
+	AActor* RecipientActor = ResolveTransformRecipient(
+		MovementSettings.Recipient,
+		InstigatorActor,
+		TargetActor
+	);
+
+	AActor* ReferenceActor = ResolveReferenceActor(
+		MovementSettings.ReferenceActorSource,
+		InstigatorActor,
+		TargetActor
+	);
+
+	if (!RecipientActor || !ReferenceActor)
+	{
+		return;
+	}
+
+	const FVector RecipientLocation = RecipientActor->GetActorLocation();
+	const FVector ReferenceLocation = ReferenceActor->GetActorLocation();
+
+	FVector Direction = RecipientLocation - ReferenceLocation;
+	Direction.Z = 0.f;
+
+	if (Direction.IsNearlyZero())
+	{
+		Direction = ReferenceActor->GetActorForwardVector();
+		Direction.Z = 0.f;
+	}
+
+	Direction = Direction.GetSafeNormal();
+
+	FVector NewLocation = RecipientLocation;
+
+	switch (MovementSettings.MoveDirection)
+	{
+	case EPLAttackOverlapMoveDirection::MoveAway:
+		NewLocation = RecipientLocation + Direction * MovementSettings.MoveDistance;
+		break;
+
+	case EPLAttackOverlapMoveDirection::MoveCloser:
+		NewLocation = RecipientLocation - Direction * MovementSettings.MoveDistance;
+		break;
+
+	case EPLAttackOverlapMoveDirection::SnapToDistance:
+		NewLocation = ReferenceLocation + Direction * MovementSettings.MoveDistance;
+		break;
+
+	case EPLAttackOverlapMoveDirection::KeepCurrentDistance:
+		NewLocation = RecipientLocation;
+		break;
+
+	default:
+		return;
+	}
+
+	if (MovementSettings.LateralOffsetMode != EPLAttackOverlapLateralOffsetMode::KeepCurrent)
+	{
+		const FVector Right = FVector::CrossProduct(FVector::UpVector, Direction).GetSafeNormal();
+
+		if (MovementSettings.LateralOffsetMode == EPLAttackOverlapLateralOffsetMode::AddOffset)
+		{
+			NewLocation += Right * MovementSettings.LateralOffset;
+		}
+		else if (MovementSettings.LateralOffsetMode == EPLAttackOverlapLateralOffsetMode::SnapToOffset)
+		{
+			NewLocation = ReferenceLocation
+				+ Direction * MovementSettings.MoveDistance
+				+ Right * MovementSettings.LateralOffset;
+		}
+	}
+
+	ApplyMoverAwareTransformToActor(
+		RecipientActor,
+		NewLocation,
+		RecipientActor->GetActorRotation(),
+		true,
+		false,
+		MovementSettings.bSweep,
+		ToTeleportType(MovementSettings.TeleportType)
+	);
+}
+
+void UPL_CombatComponent::ApplyAttackOverlapRotation(
+	const FPLAttackOverlapRotationSettings& RotationSettings,
+	AActor* InstigatorActor,
+	AActor* TargetActor
+)
+{
+	if (RotationSettings.RotationDirection == EPLAttackOverlapRotationDirection::None)
+	{
+		return;
+	}
+
+	AActor* RecipientActor = ResolveTransformRecipient(
+		RotationSettings.Recipient,
+		InstigatorActor,
+		TargetActor
+	);
+
+	AActor* ReferenceActor = ResolveReferenceActor(
+		RotationSettings.ReferenceActorSource,
+		InstigatorActor,
+		TargetActor
+	);
+
+	if (!RecipientActor || !ReferenceActor)
+	{
+		return;
+	}
+
+	FRotator DesiredRotation = RecipientActor->GetActorRotation();
+
+	switch (RotationSettings.RotationDirection)
+	{
+	case EPLAttackOverlapRotationDirection::FaceReferenceActor:
+		{
+			const FVector Direction =
+				ReferenceActor->GetActorLocation() - RecipientActor->GetActorLocation();
+
+			if (!Direction.IsNearlyZero())
+			{
+				DesiredRotation = Direction.ToOrientationRotator();
+			}
+			break;
+		}
+
+	case EPLAttackOverlapRotationDirection::FaceAwayFromReference:
+		{
+			const FVector Direction =
+				RecipientActor->GetActorLocation() - ReferenceActor->GetActorLocation();
+
+			if (!Direction.IsNearlyZero())
+			{
+				DesiredRotation = Direction.ToOrientationRotator();
+			}
+			break;
+		}
+
+	case EPLAttackOverlapRotationDirection::FaceOppositeReferenceForward:
+		{
+			const FVector Direction = -ReferenceActor->GetActorForwardVector();
+
+			if (!Direction.IsNearlyZero())
+			{
+				DesiredRotation = Direction.ToOrientationRotator();
+			}
+			break;
+		}
+
+	case EPLAttackOverlapRotationDirection::FaceDirection:
+		{
+			DesiredRotation = RotationSettings.DirectionToFace;
+			break;
+		}
+
+	default:
+		return;
+	}
+
+	DesiredRotation.Pitch = 0.f;
+	DesiredRotation.Roll = 0.f;
+
+	ApplyMoverAwareTransformToActor(
+		RecipientActor,
+		RecipientActor->GetActorLocation(),
+		DesiredRotation,
+		false,
+		true,
+		false,
+		ToTeleportType(RotationSettings.TeleportType)
+	);
+}
+
 void UPL_CombatComponent::ApplyAttackOverlapGameplayEffects(
 	const FPLActiveAttackOverlapWindow& Window,
 	AActor* HitActor,
@@ -515,4 +820,89 @@ UAbilitySystemComponent* UPL_CombatComponent::GetTargetAbilitySystemComponent(AA
 	}
 
 	return UAbilitySystemBlueprintLibrary::GetAbilitySystemComponent(TargetActor);
+}
+
+AActor* UPL_CombatComponent::ResolveTransformRecipient(
+	const EPLAttackOverlapTransformRecipient Recipient,
+	AActor* InstigatorActor,
+	AActor* TargetActor
+) const
+{
+	switch (Recipient)
+	{
+	case EPLAttackOverlapTransformRecipient::Instigator:
+		return InstigatorActor;
+
+	case EPLAttackOverlapTransformRecipient::Target:
+		return TargetActor;
+
+	default:
+		return nullptr;
+	}
+}
+
+AActor* UPL_CombatComponent::ResolveReferenceActor(
+	const EPLAttackOverlapReferenceActorSource Source,
+	AActor* InstigatorActor,
+	AActor* TargetActor
+) const
+{
+	switch (Source)
+	{
+	case EPLAttackOverlapReferenceActorSource::Instigator:
+		return InstigatorActor;
+
+	case EPLAttackOverlapReferenceActorSource::Target:
+		return TargetActor;
+
+	default:
+		return nullptr;
+	}
+}
+
+void UPL_CombatComponent::ApplyMoverAwareTransformToActor(
+	AActor* Actor,
+	const FVector& NewLocation,
+	const FRotator& NewRotation,
+	const bool bApplyLocation,
+	const bool bApplyRotation,
+	const bool bSweep,
+	const ETeleportType TeleportType
+) const
+{
+	if (!Actor || !Actor->HasAuthority())
+	{
+		return;
+	}
+
+	if (ABasePawn* BasePawn = Cast<ABasePawn>(Actor))
+	{
+		if (UPL_MoverPawnComponent* MoverPawnComponent = BasePawn->GetMoverPawnComponent())
+		{
+			MoverPawnComponent->ApplyAuthoritativeExternalTransformSnap(
+				NewLocation,
+				NewRotation,
+				bApplyLocation,
+				bApplyRotation,
+				bSweep,
+				TeleportType
+			);
+			return;
+		}
+	}
+
+	if (bApplyLocation && bApplyRotation)
+	{
+		Actor->SetActorLocationAndRotation(NewLocation, NewRotation, bSweep, nullptr, TeleportType);
+	}
+	else if (bApplyLocation)
+	{
+		Actor->SetActorLocation(NewLocation, bSweep, nullptr, TeleportType);
+	}
+	else if (bApplyRotation)
+	{
+		Actor->SetActorRotation(NewRotation, TeleportType);
+	}
+
+	Actor->ForceNetUpdate();
 }

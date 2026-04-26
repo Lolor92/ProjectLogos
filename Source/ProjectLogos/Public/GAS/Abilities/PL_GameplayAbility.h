@@ -100,6 +100,9 @@ public:
 		return MontageActivationLockoutSettings;
 	}
 
+	UFUNCTION(BlueprintCallable, Category="Ability|Hit Stop")
+	void CancelAvatarHitStop() const;
+
 protected:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category="Ability|Rotation")
 	bool bRotateToControllerYawOnActivate = false;

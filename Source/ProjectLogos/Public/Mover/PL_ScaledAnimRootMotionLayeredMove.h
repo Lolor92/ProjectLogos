@@ -48,6 +48,9 @@ struct PROJECTLOGOS_API FPL_ScaledAnimRootMotionLayeredMove : public FLayeredMov
 	UPROPERTY(BlueprintReadWrite, Category="Mover")
 	bool bRequireMoveInputForRootMotionRelease = true;
 
+	UPROPERTY()
+	float HitStopAdjustedMontagePosition = -1.f;
+
 	virtual bool GenerateMove(
 		const FMoverTickStartData& StartState,
 		const FMoverTimeStep& TimeStep,

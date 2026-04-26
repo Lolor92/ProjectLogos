@@ -7,6 +7,7 @@
 #include "GameFramework/Pawn.h"
 #include "MotionWarpingComponent.h"
 #include "MoveLibrary/MovementUtilsTypes.h"
+#include "Mover/PL_MoverPawnComponent.h"
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
@@ -57,9 +58,30 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 		}
 	}
 
-	const double SecondsSinceMontageStarted = (TimeStep.BaseSimTimeMs - StartSimTimeMs) / 1000.0;
-	const double ScaledSecondsSinceMontageStarted = SecondsSinceMontageStarted * MontageState.PlayRate;
-	const float ExtractionStartPosition = MontageState.StartingMontagePosition + ScaledSecondsSinceMontageStarted;
+	float HitStopRootMotionTimeScale = 1.f;
+
+	if (const AActor* OwnerActor = MoverComp->GetOwner())
+	{
+		if (const UPL_MoverPawnComponent* MoverPawnComponent =
+			OwnerActor->FindComponentByClass<UPL_MoverPawnComponent>())
+		{
+			HitStopRootMotionTimeScale = MoverPawnComponent->GetHitStopRootMotionTimeScale();
+		}
+	}
+
+	HitStopRootMotionTimeScale = FMath::Clamp(HitStopRootMotionTimeScale, 0.f, 1.f);
+
+	if (HitStopAdjustedMontagePosition < 0.f)
+	{
+		const double SecondsSinceMontageStarted =
+			(TimeStep.BaseSimTimeMs - StartSimTimeMs) / 1000.0;
+
+		HitStopAdjustedMontagePosition =
+			MontageState.StartingMontagePosition
+			+ SecondsSinceMontageStarted * MontageState.PlayRate;
+	}
+
+	const float ExtractionStartPosition = HitStopAdjustedMontagePosition;
 	const bool bPastReleasePoint = bUseRootMotionRelease && ExtractionStartPosition >= RootMotionReleasePosition;
 	const bool bShouldReleaseRootMotion = bPastReleasePoint && (!bRequireMoveInputForRootMotionRelease || HasMovementInput(StartState));
 	
@@ -77,7 +99,8 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 		return false;
 	}
 
-	const float ExtractionEndPosition = ExtractionStartPosition + (DeltaSeconds * MontageState.PlayRate);
+	const float EffectivePlayRate = MontageState.PlayRate * HitStopRootMotionTimeScale;
+	const float ExtractionEndPosition = ExtractionStartPosition + (DeltaSeconds * EffectivePlayRate);
 	
 	// Pull root motion from the montage for this simulation step.
 	FTransform LocalRootMotion = MontageState.Montage ? UMotionWarpingUtilities::ExtractRootMotionFromAnimation(
@@ -144,7 +167,8 @@ bool FPL_ScaledAnimRootMotionLayeredMove::GenerateMove(
 	OutProposedMove.AngularVelocityDegrees =
 		FMath::RadiansToDegrees(WorldRootMotion.GetRotation().ToRotationVector() / DeltaSeconds);
 
-	MontageState.CurrentPosition = ExtractionStartPosition;
+	HitStopAdjustedMontagePosition = ExtractionEndPosition;
+	MontageState.CurrentPosition = ExtractionEndPosition;
 
 	return true;
 }
@@ -169,6 +193,7 @@ void FPL_ScaledAnimRootMotionLayeredMove::NetSerialize(FArchive& Ar)
 	Ar << bUseRootMotionRelease;
 	Ar << RootMotionReleasePosition;
 	Ar << bRequireMoveInputForRootMotionRelease;
+	Ar << HitStopAdjustedMontagePosition;
 }
 
 UScriptStruct* FPL_ScaledAnimRootMotionLayeredMove::GetScriptStruct() const

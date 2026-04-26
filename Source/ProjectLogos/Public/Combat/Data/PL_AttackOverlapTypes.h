@@ -71,6 +71,209 @@ struct FPLAttackOverlapGameplayEffect
 	float EffectLevel = 1.f;
 };
 
+UENUM(BlueprintType)
+enum class EPLAttackOverlapMoveDirection : uint8
+{
+	None UMETA(DisplayName="None"),
+	KeepCurrentDistance UMETA(DisplayName="Keep Current Distance"),
+	MoveCloser UMETA(DisplayName="Move Closer"),
+	MoveAway UMETA(DisplayName="Move Away"),
+	SnapToDistance UMETA(DisplayName="Snap To Distance")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapLateralOffsetMode : uint8
+{
+	KeepCurrent UMETA(DisplayName="Keep Current"),
+	AddOffset UMETA(DisplayName="Add Offset"),
+	SnapToOffset UMETA(DisplayName="Snap To Offset")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapTransformTriggerTiming : uint8
+{
+	OnHit UMETA(DisplayName="On Hit"),
+	OnActivation UMETA(DisplayName="On Activation"),
+	Both UMETA(DisplayName="Both")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapTransformRecipient : uint8
+{
+	Instigator UMETA(DisplayName="Instigator"),
+	Target UMETA(DisplayName="Target"),
+	Both UMETA(DisplayName="Both")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapHitStopRecipient : uint8
+{
+	Instigator UMETA(DisplayName="Instigator"),
+	Target UMETA(DisplayName="Target"),
+	Both UMETA(DisplayName="Both")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapHitStopApplicationMode : uint8
+{
+	OncePerNotify UMETA(DisplayName="Once Per Notify"),
+	OncePerHitActor UMETA(DisplayName="Once Per Hit Actor")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapReferenceActorSource : uint8
+{
+	Instigator UMETA(DisplayName="Instigator"),
+	Target UMETA(DisplayName="Target")
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapTeleportType : uint8
+{
+	None UMETA(DisplayName="None"),
+	ResetPhysics UMETA(DisplayName="Reset Physics"),
+	TeleportPhysics UMETA(DisplayName="Teleport Physics")
+};
+
+static FORCEINLINE ETeleportType ToTeleportType(const EPLAttackOverlapTeleportType InTeleportType)
+{
+	switch (InTeleportType)
+	{
+	case EPLAttackOverlapTeleportType::ResetPhysics:
+		return ETeleportType::ResetPhysics;
+
+	case EPLAttackOverlapTeleportType::TeleportPhysics:
+		return ETeleportType::TeleportPhysics;
+
+	case EPLAttackOverlapTeleportType::None:
+	default:
+		return ETeleportType::None;
+	}
+}
+
+USTRUCT(BlueprintType)
+struct FPLAttackOverlapMovementSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement")
+	EPLAttackOverlapMoveDirection MoveDirection = EPLAttackOverlapMoveDirection::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTransformTriggerTiming TriggerTiming = EPLAttackOverlapTransformTriggerTiming::OnHit;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTransformRecipient Recipient = EPLAttackOverlapTransformRecipient::Target;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapReferenceActorSource ReferenceActorSource = EPLAttackOverlapReferenceActorSource::Instigator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(ClampMin="0.0", EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None && MoveDirection != EPLAttackOverlapMoveDirection::KeepCurrentDistance", EditConditionHides, HideEditConditionToggle))
+	float MoveDistance = 100.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapLateralOffsetMode LateralOffsetMode = EPLAttackOverlapLateralOffsetMode::KeepCurrent;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None && LateralOffsetMode != EPLAttackOverlapLateralOffsetMode::KeepCurrent", EditConditionHides, HideEditConditionToggle))
+	float LateralOffset = 0.f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	bool bSweep = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement",
+		meta=(EditCondition="MoveDirection != EPLAttackOverlapMoveDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTeleportType TeleportType = EPLAttackOverlapTeleportType::ResetPhysics;
+};
+
+UENUM(BlueprintType)
+enum class EPLAttackOverlapRotationDirection : uint8
+{
+	None UMETA(DisplayName="None"),
+	FaceReferenceActor UMETA(DisplayName="Face Reference Actor"),
+	FaceAwayFromReference UMETA(DisplayName="Face Away From Reference"),
+	FaceOppositeReferenceForward UMETA(DisplayName="Face Opposite Reference Forward"),
+	FaceDirection UMETA(DisplayName="Face Direction")
+};
+
+USTRUCT(BlueprintType)
+struct FPLAttackOverlapRotationSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation")
+	EPLAttackOverlapRotationDirection RotationDirection = EPLAttackOverlapRotationDirection::None;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation",
+		meta=(EditCondition="RotationDirection != EPLAttackOverlapRotationDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTransformTriggerTiming TriggerTiming = EPLAttackOverlapTransformTriggerTiming::OnHit;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation",
+		meta=(EditCondition="RotationDirection != EPLAttackOverlapRotationDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTransformRecipient Recipient = EPLAttackOverlapTransformRecipient::Target;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation",
+		meta=(EditCondition="RotationDirection != EPLAttackOverlapRotationDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapReferenceActorSource ReferenceActorSource = EPLAttackOverlapReferenceActorSource::Instigator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation",
+		meta=(EditCondition="RotationDirection == EPLAttackOverlapRotationDirection::FaceDirection", EditConditionHides, HideEditConditionToggle))
+	FRotator DirectionToFace = FRotator::ZeroRotator;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation",
+		meta=(EditCondition="RotationDirection != EPLAttackOverlapRotationDirection::None", EditConditionHides, HideEditConditionToggle))
+	EPLAttackOverlapTeleportType TeleportType = EPLAttackOverlapTeleportType::ResetPhysics;
+};
+
+USTRUCT(BlueprintType)
+struct FPLAttackOverlapHitStopSettings
+{
+	GENERATED_BODY()
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop")
+	bool bEnableHitStop = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides, ClampMin="0.0", UIMin="0.0"))
+	float Duration = 0.05f;
+
+	// 0.0 = freeze, 0.1 = very slow, 1.0 = normal speed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides, ClampMin="0.0", ClampMax="1.0", UIMin="0.0", UIMax="1.0"))
+	float TimeScale = 0.0f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides))
+	EPLAttackOverlapHitStopRecipient Recipient = EPLAttackOverlapHitStopRecipient::Both;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides))
+	EPLAttackOverlapHitStopApplicationMode ApplicationMode = EPLAttackOverlapHitStopApplicationMode::OncePerNotify;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides))
+	bool bAffectAnimation = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides))
+	bool bAffectMoverRootMotion = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop",
+		meta=(EditCondition="bEnableHitStop", EditConditionHides))
+	bool bCancelWhenNewAbilityStarts = true;
+
+	bool IsEnabled() const
+	{
+		return bEnableHitStop && Duration > 0.f && TimeScale < 1.f;
+	}
+};
+
 USTRUCT(BlueprintType)
 struct FPLAttackOverlapWindowSettings
 {
@@ -92,6 +295,15 @@ struct FPLAttackOverlapWindowSettings
 	// Prevents one attack window from hitting the same actor every tick.
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap")
 	bool bHitEachActorOnce = true;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Movement", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapMovementSettings Movement;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Rotation", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapRotationSettings Rotation;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Hit Stop", meta=(ShowOnlyInnerProperties))
+	FPLAttackOverlapHitStopSettings HitStop;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Attack Overlap|Effects", meta=(TitleProperty="GameplayEffectClass"))
 	TArray<FPLAttackOverlapGameplayEffect> GameplayEffectsToApply;

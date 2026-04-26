@@ -8,6 +8,7 @@
 #include "MoverComponent.h"
 #include "MoverDataModelTypes.h"
 #include "MoverSimulationTypes.h"
+#include "TimerManager.h"
 
 DEFINE_LOG_CATEGORY_STATIC(LogPLMoverFacing, Log, All);
 
@@ -108,6 +109,33 @@ void UPL_MoverPawnComponent::ApplyAuthoritativeExternalTransformSnap(
 	}
 }
 
+void UPL_MoverPawnComponent::ApplyAuthoritativeHitStop(
+	const float Duration,
+	const float TimeScale,
+	const bool bAffectAnimation,
+	const bool bAffectMoverRootMotion
+)
+{
+	const AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !OwnerActor->HasAuthority())
+	{
+		return;
+	}
+
+	if (Duration <= 0.f || TimeScale >= 1.f)
+	{
+		return;
+	}
+
+	// Server executes this too, and relevant clients receive it.
+	MulticastApplyHitStop(
+		Duration,
+		TimeScale,
+		bAffectAnimation,
+		bAffectMoverRootMotion
+	);
+}
+
 void UPL_MoverPawnComponent::ClientApplyExternalTransformSnap_Implementation(
 	FVector NewLocation,
 	FRotator NewRotation,
@@ -125,6 +153,134 @@ void UPL_MoverPawnComponent::ClientApplyExternalTransformSnap_Implementation(
 		bSweep,
 		TeleportType
 	);
+}
+
+void UPL_MoverPawnComponent::MulticastApplyHitStop_Implementation(
+	const float Duration,
+	const float TimeScale,
+	const bool bAffectAnimation,
+	const bool bAffectMoverRootMotion
+)
+{
+	ApplyHitStopLocal(
+		Duration,
+		TimeScale,
+		bAffectAnimation,
+		bAffectMoverRootMotion
+	);
+}
+
+void UPL_MoverPawnComponent::ApplyHitStopLocal(
+	const float Duration,
+	const float TimeScale,
+	const bool bAffectAnimation,
+	const bool bAffectMoverRootMotion
+)
+{
+	AActor* OwnerActor = GetOwner();
+	UWorld* World = GetWorld();
+
+	if (!OwnerActor || !World || Duration <= 0.f)
+	{
+		return;
+	}
+
+	const float ClampedTimeScale = FMath::Clamp(TimeScale, 0.f, 1.f);
+
+	++HitStopSerial;
+	const uint32 ThisSerial = HitStopSerial;
+
+	if (bAffectMoverRootMotion)
+	{
+		HitStopRootMotionTimeScale = ClampedTimeScale;
+	}
+
+	if (bAffectAnimation)
+	{
+		if (USkeletalMeshComponent* Mesh = OwnerActor->FindComponentByClass<USkeletalMeshComponent>())
+		{
+			if (!bHasSavedGlobalAnimRateScale)
+			{
+				SavedGlobalAnimRateScale = Mesh->GlobalAnimRateScale;
+				bHasSavedGlobalAnimRateScale = true;
+			}
+
+			Mesh->GlobalAnimRateScale = ClampedTimeScale;
+		}
+	}
+
+	FTimerDelegate TimerDelegate;
+	TimerDelegate.BindUObject(this, &UPL_MoverPawnComponent::FinishHitStop, ThisSerial);
+
+	World->GetTimerManager().ClearTimer(HitStopTimerHandle);
+	World->GetTimerManager().SetTimer(
+		HitStopTimerHandle,
+		TimerDelegate,
+		Duration,
+		false
+	);
+}
+
+void UPL_MoverPawnComponent::CancelHitStop()
+{
+	UWorld* World = GetWorld();
+	if (World)
+	{
+		World->GetTimerManager().ClearTimer(HitStopTimerHandle);
+	}
+
+	++HitStopSerial;
+
+	HitStopRootMotionTimeScale = 1.f;
+
+	AActor* OwnerActor = GetOwner();
+	if (OwnerActor)
+	{
+		if (USkeletalMeshComponent* Mesh = OwnerActor->FindComponentByClass<USkeletalMeshComponent>())
+		{
+			if (bHasSavedGlobalAnimRateScale)
+			{
+				Mesh->GlobalAnimRateScale = SavedGlobalAnimRateScale;
+			}
+			else
+			{
+				Mesh->GlobalAnimRateScale = 1.f;
+			}
+		}
+	}
+
+	bHasSavedGlobalAnimRateScale = false;
+	SavedGlobalAnimRateScale = 1.f;
+}
+
+void UPL_MoverPawnComponent::FinishHitStop(const uint32 Serial)
+{
+	if (Serial != HitStopSerial)
+	{
+		return;
+	}
+
+	AActor* OwnerActor = GetOwner();
+
+	HitStopRootMotionTimeScale = 1.f;
+
+	if (OwnerActor)
+	{
+		if (USkeletalMeshComponent* Mesh = OwnerActor->FindComponentByClass<USkeletalMeshComponent>())
+		{
+			if (bHasSavedGlobalAnimRateScale)
+			{
+				Mesh->GlobalAnimRateScale = SavedGlobalAnimRateScale;
+			}
+			else
+			{
+				Mesh->GlobalAnimRateScale = 1.f;
+			}
+		}
+	}
+
+	bHasSavedGlobalAnimRateScale = false;
+	SavedGlobalAnimRateScale = 1.f;
 }
 
 void UPL_MoverPawnComponent::RequestForcedFacingYaw(float Yaw)
