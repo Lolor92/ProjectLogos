@@ -34,11 +34,9 @@ void UPL_AnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	GroundSpeed = OwningBasePawn->GetGroundSpeed();
 	bIsMoving = OwningBasePawn->IsMoving();
 	bIsAccelerating = OwningBasePawn->IsAcceleratingForAnimation();
-
-	// Matches old CMC-style "IsFalling" behavior.
+	
 	bIsInAir = OwningBasePawn->IsMoverFalling();
-
-	// Optional broader airborne flag, useful later if you add flying/launch states.
+	
 	bIsAirborne = OwningBasePawn->IsMoverAirborne();
 
 	if (!bIsMoving)
